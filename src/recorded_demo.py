@@ -234,8 +234,8 @@ def simulate(world, path, start, capture=False):
             status = "safety_stop"
             break
         if capture and step == 3000:
-            view = bullet.computeViewMatrix([xy[0] + 4, xy[1] - 6, 7],
-                                            [xy[0], xy[1] + 1, 0], [0, 0, 1])
+            view = bullet.computeViewMatrix([xy[0] + 2.5, xy[1] - 4, 4.3],
+                                            [xy[0], xy[1] + .8, 0], [0, 0, 1])
             projection = bullet.computeProjectionMatrixFOV(55, 16 / 9, .1, 50)
             _, _, pixels, _, _ = bullet.getCameraImage(1280, 720, view, projection,
                                                        renderer=bullet.ER_TINY_RENDERER)
