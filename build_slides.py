@@ -1,268 +1,297 @@
-"""Build the project update deck from measured rover_demo.py outputs."""
+"""Build the class-style project update as an editable PowerPoint deck.
+
+The 10 × 5.625 inch layout, cream canvas, teal accents, and plain typography
+follow the team's original Google Slides presentation.
+"""
 
 from __future__ import annotations
 
 import json
+import math
 from pathlib import Path
 
-from PIL import Image
+import matplotlib
+
+matplotlib.use("Agg")
+import matplotlib.pyplot as plt
+import numpy as np
 from pptx import Presentation
 from pptx.dml.color import RGBColor
-from pptx.enum.shapes import MSO_SHAPE
+from pptx.enum.shapes import MSO_CONNECTOR, MSO_SHAPE
 from pptx.enum.text import MSO_ANCHOR, PP_ALIGN
 from pptx.util import Inches, Pt
+
+from src import robot_motion as sim
 
 
 ROOT = Path(__file__).parent
 RESULTS = ROOT / "results"
-DATA = json.loads((RESULTS / "metrics.json").read_text())
-METHODS = DATA["methods"]
+METRICS = json.loads((RESULTS / "metrics.json").read_text())
+METHODS = METRICS["methods"]
 OUT = ROOT / "docs" / "Teach_and_Repeat_Project_Update_Oct_7_2026.pptx"
 
-BG = "0B1523"
-PANEL = "14263B"
-PANEL2 = "1A3149"
-WHITE = "EFF5FA"
-MUTED = "AFC1D1"
-CYAN = "65B8FF"
-GREEN = "54D2A0"
-GOLD = "FFC56E"
-RED = "ED6A5A"
-LAV = "AD99E7"
+CREAM = "FBF9F0"
+TEAL = "27A69A"
+DEEP_TEAL = "147B73"
+BLACK = "101010"
+GREY = "555555"
+LIGHT_GREY = "DDDCD3"
+PALE_TEAL = "DFF0ED"
+RED = "C5554C"
+GOLD = "B7822F"
+BLUE = "337DA5"
 
 
-def rgb(hexcode):
-    return RGBColor.from_string(hexcode)
+def color(code):
+    return RGBColor.from_string(code)
 
 
-def rect(slide, x, y, w, h, fill=PANEL, line=None, radius=True):
-    shape = slide.shapes.add_shape(MSO_SHAPE.ROUNDED_RECTANGLE if radius else MSO_SHAPE.RECTANGLE,
+def box(slide, x, y, w, h, fill, line=None, round_corner=False):
+    shape = slide.shapes.add_shape(MSO_SHAPE.ROUNDED_RECTANGLE if round_corner else MSO_SHAPE.RECTANGLE,
                                    Inches(x), Inches(y), Inches(w), Inches(h))
     shape.fill.solid()
-    shape.fill.fore_color.rgb = rgb(fill)
-    shape.line.fill.background() if line is None else None
+    shape.fill.fore_color.rgb = color(fill)
     if line:
-        shape.line.color.rgb = rgb(line)
+        shape.line.color.rgb = color(line)
+    else:
+        shape.line.fill.background()
     return shape
 
 
-def text(slide, content, x, y, w, h, size=20, color=WHITE, bold=False,
-         align=PP_ALIGN.LEFT, font="Aptos", valign=MSO_ANCHOR.MIDDLE):
+def label(slide, value, x, y, w, h, pt=17, ink=BLACK, bold=False,
+          align=PP_ALIGN.LEFT, valign=MSO_ANCHOR.MIDDLE, font="Arial"):
     shape = slide.shapes.add_textbox(Inches(x), Inches(y), Inches(w), Inches(h))
-    frame = shape.text_frame
-    frame.clear()
-    frame.word_wrap = True
-    frame.margin_left = frame.margin_right = Inches(0.02)
-    frame.margin_top = frame.margin_bottom = Inches(0.02)
-    frame.vertical_anchor = valign
-    paragraph = frame.paragraphs[0]
-    paragraph.text = content
-    paragraph.alignment = align
-    paragraph.font.name = font
-    paragraph.font.size = Pt(size)
-    paragraph.font.bold = bold
-    paragraph.font.color.rgb = rgb(color)
+    tf = shape.text_frame
+    tf.clear()
+    tf.word_wrap = True
+    tf.margin_left = tf.margin_right = Inches(0.01)
+    tf.margin_top = tf.margin_bottom = Inches(0.01)
+    tf.vertical_anchor = valign
+    p = tf.paragraphs[0]
+    p.text = value
+    p.alignment = align
+    p.font.name = font
+    p.font.size = Pt(pt)
+    p.font.bold = bold
+    p.font.color.rgb = color(ink)
     return shape
 
 
-def image(slide, path, x, y, w, h):
-    with Image.open(path) as im:
-        iw, ih = im.size
-    ratio = min(w / iw, h / ih)
-    ww, hh = iw * ratio, ih * ratio
-    slide.shapes.add_picture(str(path), Inches(x + (w - ww) / 2), Inches(y + (h - hh) / 2),
-                             width=Inches(ww), height=Inches(hh))
-
-
-def base(title=None, section=None):
-    slide = pres.slides.add_slide(pres.slide_layouts[6])
-    slide.background.fill.solid()
-    slide.background.fill.fore_color.rgb = rgb(BG)
-    rect(slide, 0, 0, 0.10, 7.5, CYAN, radius=False)
-    if section:
-        text(slide, section.upper(), 0.53, 0.24, 4.2, 0.28, 10, CYAN, True)
+def slide(title=None):
+    page = deck.slides.add_slide(deck.slide_layouts[6])
+    page.background.fill.solid()
+    page.background.fill.fore_color.rgb = color(CREAM)
+    box(page, 0, 5.57, 10, 0.055, TEAL)
     if title:
-        text(slide, title, 0.53, 0.63, 12.2, 0.6, 27, WHITE, True)
-    text(slide, "TEACH & REPEAT  /  PRELIMINARY SIMULATION", 0.55, 7.15, 8.3, 0.19, 8.5, MUTED)
-    text(slide, f"{len(pres.slides):02d}", 12.42, 7.12, 0.4, 0.23, 9, MUTED, align=PP_ALIGN.RIGHT)
-    return slide
+        label(page, title, 0.45, 0.22, 9.1, 0.55, 28, BLACK)
+    return page
 
 
-def metric_card(slide, x, y, w, value, label, color=CYAN):
-    rect(slide, x, y, w, 1.25, PANEL)
-    text(slide, value, x + 0.20, y + 0.16, w - 0.4, 0.49, 28, color, True)
-    text(slide, label, x + 0.20, y + 0.71, w - 0.4, 0.31, 12, MUTED)
+def line(slide, x1, y1, x2, y2, ink=LIGHT_GREY, width=1):
+    shape = slide.shapes.add_connector(MSO_CONNECTOR.STRAIGHT, Inches(x1), Inches(y1),
+                                       Inches(x2), Inches(y2))
+    shape.line.color.rgb = color(ink)
+    shape.line.width = Pt(width)
+    return shape
 
 
-pres = Presentation()
-pres.slide_width = Inches(13.333)
-pres.slide_height = Inches(7.5)
+def figure(slide, path, x, y, w, h):
+    # All generated plots use the intended slide aspect ratio.
+    slide.shapes.add_picture(str(path), Inches(x), Inches(y), width=Inches(w), height=Inches(h))
 
-# 1 — cover
-slide = base(section="Project update  |  October 7, 2026")
-rect(slide, 0.55, 1.03, 0.12, 0.71, GOLD, radius=False)
-text(slide, "Teach & Repeat\nRover Navigation", 0.82, 1.15, 5.5, 1.72, 34, WHITE, True)
-text(slide, "Adapting one demonstrated route from a displaced start", 0.82, 3.10, 5.05, 0.94, 22, MUTED)
-rect(slide, 0.82, 4.44, 4.8, 0.58, PANEL2)
-text(slide, "FOUR METHODS  •  60 START POSES EACH", 1.04, 4.53, 4.35, 0.34, 13, GREEN, True)
-text(slide, "Ayush Kaulgud  ·  Irenov Joel  ·  Tapisar Singh", 0.82, 5.55, 5.35, 0.45, 15, WHITE)
-with Image.open(RESULTS / "four_methods.png") as im:
-    im.crop((im.width // 2, im.height // 2, im.width, im.height)).save(RESULTS / "cover_demo.png")
-rect(slide, 6.75, 1.15, 5.85, 4.95, PANEL)
-image(slide, RESULTS / "cover_demo.png", 6.93, 1.38, 5.50, 4.50)
-text(slide, "Obstacle-aware DMP  /  successful example", 7.15, 6.19, 5.35, 0.35, 12, GOLD)
 
-# 2 — purpose and pipeline
-slide = base("The question and our current prototype", "01  /  Problem")
-rect(slide, 0.55, 1.43, 5.08, 4.99, PANEL)
-text(slide, "Can the rover safely rejoin a taught route when it starts elsewhere?",
-     0.89, 1.81, 4.38, 1.65, 25, WHITE, True)
-text(slide, "Same route. Same map. Same feedback controller. Only the recovery trajectory changes.",
-     0.89, 3.94, 4.28, 1.16, 17, MUTED)
-rect(slide, 0.89, 5.54, 4.16, 0.52, PANEL2)
-text(slide, "INITIAL SIMULATION  /  2-D STATIC MAP", 1.10, 5.62, 3.79, 0.30, 11, CYAN, True)
-steps = [("01", "Teach", "Record a safe reference route"),
-         ("02", "ICP prototype", "Synthetic registration, separate from trials"),
-         ("03", "Recover", "Generate one of four paths"),
-         ("04", "Check", "Reject unsafe plans; monitor margin"),
-         ("05", "Repeat", "Follow with a shared controller")]
-for i, (num, label, detail) in enumerate(steps):
-    y = 1.45 + i * 0.99
-    rect(slide, 6.02, y, 6.62, 0.82, PANEL)
-    text(slide, num, 6.27, y + 0.15, 0.57, 0.47, 18, CYAN, True)
-    text(slide, label, 6.93, y + 0.09, 1.74, 0.31, 16, WHITE, True)
-    text(slide, detail, 8.51, y + 0.09, 3.77, 0.52, 13, MUTED)
+def plot_map(ax):
+    ax.set_facecolor("#fbf9f0")
+    for ox, oy, radius in sim.OBSTACLES:
+        ax.add_patch(plt.Circle((ox, oy), radius, color="#bb6d64", alpha=0.80, zorder=2))
+        ax.add_patch(plt.Circle((ox, oy), radius + sim.ROVER_RADIUS + sim.SAFETY_MARGIN,
+                                edgecolor="#bd786f", facecolor="none", lw=0.9, ls="--"))
+    ax.plot(sim.DEMO[:, 0], sim.DEMO[:, 1], "--", color="#3e6661", lw=1.35, label="Taught route")
+    ax.set(xlim=(0, 10), ylim=(0, 7))
+    ax.set_aspect("equal")
+    ax.grid(color="#9daaa4", alpha=0.28, lw=0.6)
+    ax.tick_params(labelsize=8, colors="#444444")
+    for spine in ax.spines.values():
+        spine.set_color("#888888")
 
-# 3 — four planners
-slide = base("Four recovery methods, one test harness", "02  /  Algorithms")
-cards = [
-    ("01", "Direct waypoints", "Connect to the nearest forward taught point, then follow stored waypoints.", RED),
-    ("02", "Local reconnection", "Use grid A* to find a collision-free merge onto the demonstrated route.", GREEN),
-    ("03", "Classical DMP", "Fit a discrete DMP to the demonstration; regenerate from the new start.", CYAN),
-    ("04", "Obstacle-aware DMP", "Add a repulsive obstacle coupling term during DMP rollout.", GOLD),
-]
-for i, (num, name, detail, color) in enumerate(cards):
-    x = 0.55 + (i % 2) * 6.16
-    y = 1.45 + (i // 2) * 2.43
-    rect(slide, x, y, 5.78, 2.12, PANEL)
-    rect(slide, x, y, 0.08, 2.12, color, radius=False)
-    text(slide, num, x + 0.28, y + 0.20, 0.64, 0.34, 14, color, True)
-    text(slide, name, x + 0.90, y + 0.17, 4.60, 0.40, 21, WHITE, True)
-    text(slide, detail, x + 0.30, y + 0.80, 5.12, 0.85, 16, MUTED)
-rect(slide, 0.55, 6.39, 12.00, 0.39, PANEL2)
-text(slide, "ICP is the shared localization component; it is not a fifth trajectory planner.",
-     0.78, 6.45, 11.45, 0.24, 12, CYAN)
 
-# 4 — actual trajectories
-slide = base("One displaced start, four visibly different outcomes", "03  /  Demonstration")
-rect(slide, 0.55, 1.33, 8.51, 5.56, PANEL)
-image(slide, RESULTS / "four_methods.png", 0.70, 1.49, 8.21, 5.23)
-rect(slide, 9.31, 1.33, 3.25, 5.56, PANEL)
-text(slide, "EXAMPLE START", 9.61, 1.68, 2.60, 0.29, 11, CYAN, True)
-text(slide, "(2.2, 3.35) m\n−35° heading", 9.61, 2.12, 2.55, 1.06, 22, WHITE, True)
-text(slide, "Local reconnection and obstacle-aware DMP completed this run.",
-     9.61, 3.60, 2.50, 1.20, 17, MUTED)
-text(slide, "Dashed white = taught route\nColored = planned path\nCream = rover trace\nRed rings = safety buffer",
-     9.61, 5.03, 2.65, 1.28, 12, MUTED)
+def create_figures():
+    RESULTS.mkdir(exist_ok=True)
+    start = (2.2, 3.35, math.radians(-35))
+    styles = [
+        ("Waypoints", sim.waypoint_path, "#c5554c"),
+        ("Local reconnection", sim.reconnect_path, "#148a7d"),
+        ("Classical DMP", lambda p: sim.dmp_path(p, False), "#337da5"),
+        ("Obstacle-aware DMP", lambda p: sim.dmp_path(p, True), "#b7822f"),
+    ]
+    fig, axes = plt.subplots(2, 2, figsize=(12, 6.3), constrained_layout=True, facecolor="#fbf9f0")
+    for ax, (name, planner, ink) in zip(axes.flat, styles):
+        path = planner(start)
+        accepted = path is not None and sim.inside(path) and float(np.min(sim.clearance(path))) >= sim.SAFETY_MARGIN
+        outcome, trace = sim.execute(path, start) if accepted else ("rejected", np.array([start[:2]]))
+        plot_map(ax)
+        if path is not None:
+            ax.plot(path[:, 0], path[:, 1], color=ink, lw=2.0)
+        if accepted:
+            ax.plot(trace[:, 0], trace[:, 1], color="#232323", lw=0.9, alpha=0.8)
+        ax.scatter([start[0]], [start[1]], marker="*", s=72, color=ink, zorder=5)
+        ax.set_title(f"{name}  —  {outcome.replace('_', ' ').title()}", fontsize=12, loc="left", pad=6)
+    fig.savefig(RESULTS / "four_methods_class_style.png", dpi=180, facecolor=fig.get_facecolor())
+    plt.close(fig)
 
-# 5 — primary outcomes
-slide = base("Initial outcome across 60 starts per method", "04  /  Results")
-rect(slide, 0.55, 1.38, 8.62, 4.99, PANEL)
-image(slide, RESULTS / "outcomes.png", 0.76, 1.71, 8.20, 4.35)
-metric_card(slide, 9.42, 1.38, 3.15, f'{METHODS["Local reconnection"]["completion_pct"]:.1f}%',
-            "Highest completion: A*", GREEN)
-metric_card(slide, 9.42, 2.81, 3.15,
-            f'+{METHODS["Obstacle-aware DMP"]["completion_pct"] - METHODS["Classical DMP"]["completion_pct"]:.1f} pp',
-            "Coupling vs. classical DMP", GOLD)
-metric_card(slide, 9.42, 4.24, 3.15, "0%", "Observed collision rate", CYAN)
-text(slide, "Safety stops are counted separately from path rejections.",
-     0.75, 6.53, 10.80, 0.29, 12, MUTED)
+    fig, ax = plt.subplots(figsize=(8, 5), layout="constrained", facecolor="#fbf9f0")
+    plot_map(ax)
+    path = sim.reconnect_path(start)
+    ax.plot(path[:, 0], path[:, 1], color="#147e74", lw=2.4, label="Local reconnection")
+    ax.scatter([start[0]], [start[1]], marker="*", s=100, color="#147e74", zorder=5)
+    ax.legend(frameon=False, loc="lower right", fontsize=9)
+    fig.savefig(RESULTS / "route_example_class_style.png", dpi=180, facecolor=fig.get_facecolor())
+    plt.close(fig)
 
-# 6 — full metrics
-slide = base("Metrics from the original project plan", "05  /  Measurements")
-headers = ["METHOD", "COMPLETE", "REJECT", "STOP", "MIN CLR", "GOAL ERR", "PLAN TIME"]
-widths = [2.40, 1.35, 1.13, 1.03, 1.52, 1.59, 1.70]
-xs = [0.70]
-for width in widths[:-1]:
-    xs.append(xs[-1] + width)
-rect(slide, 0.56, 1.45, 12.0, 0.72, PANEL2)
-for x, width, header in zip(xs, widths, headers):
-    text(slide, header, x, 1.63, width - 0.07, 0.28, 11, CYAN, True)
-for idx, (name, values) in enumerate(METHODS.items()):
-    y = 2.29 + idx * 0.93
-    rect(slide, 0.56, y, 12.0, 0.77, PANEL if idx % 2 == 0 else "122237")
-    fields = [name, f'{values["completion_pct"]:.1f}%', f'{values["rejection_pct"]:.1f}%',
-              f'{values["safety_stop_pct"]:.1f}%', f'{values["minimum_clearance_m"]:.3f} m',
-              f'{values["median_goal_error_m"]:.3f} m' if values["median_goal_error_m"] is not None else "—",
-              f'{values["median_planning_ms"]:.2f} ms']
-    for j, (x, width, value) in enumerate(zip(xs, widths, fields)):
-        text(slide, value, x, y + 0.17, width - 0.08, 0.37, 13 if j == 0 else 12,
-             WHITE if j != 1 else GREEN, j == 0)
-text(slide, "Minimum clearance is measured on executed traces. Goal error is the median for completed runs.",
-     0.76, 6.19, 11.80, 0.30, 12, MUTED)
-text(slide, "Planning time depends on this laptop and is descriptive, not a hardware benchmark.",
-     0.76, 6.55, 11.80, 0.30, 12, MUTED)
+    icp = sim.icp_demo()
+    fig, ax = plt.subplots(figsize=(7.3, 4.5), layout="constrained", facecolor="#fbf9f0")
+    ax.set_facecolor("#fbf9f0")
+    ax.scatter(icp["map"][:, 0], icp["map"][:, 1], s=20, color="#222222", label="Recorded map")
+    ax.scatter(icp["scan"][:, 0], icp["scan"][:, 1], s=24, marker="x", color="#c5554c", label="Current scan")
+    ax.scatter(icp["corrected"][:, 0], icp["corrected"][:, 1], s=13, color="#27a69a", label="After ICP")
+    ax.set(xlim=(0, 10), ylim=(0, 7), xlabel="x (m)", ylabel="y (m)")
+    ax.set_aspect("equal")
+    ax.grid(color="#9daaa4", alpha=0.25)
+    ax.legend(frameon=False, loc="upper left", fontsize=9)
+    fig.savefig(RESULTS / "icp_class_style.png", dpi=180, facecolor=fig.get_facecolor())
+    plt.close(fig)
 
-# 7 — ICP localization demonstration
-slide = base("ICP localization proof of concept", "06  /  Localization")
-rect(slide, 0.55, 1.34, 8.09, 5.45, PANEL)
-image(slide, RESULTS / "icp_registration.png", 0.76, 1.53, 7.68, 5.03)
-metric_card(slide, 8.90, 1.34, 3.66, f'{DATA["icp"]["registration_rmse_m"]:.3f} m',
-            "Registration RMSE", GREEN)
-metric_card(slide, 8.90, 2.77, 3.66, f'{DATA["icp"]["translation_error_m"]:.4f} m',
-            "Translation error", CYAN)
-metric_card(slide, 8.90, 4.20, 3.66, f'{DATA["icp"]["rotation_error_deg"]:.3f}°',
-            "Rotation error", GOLD)
-text(slide, "Synthetic 55-point scan; ICP is demonstrated separately from navigation trials.",
-     9.10, 5.80, 3.12, 0.76, 12, MUTED)
 
-# 8 — interpretation and work ahead
-slide = base("What we learned and what comes next", "07  /  Update")
-rect(slide, 0.55, 1.46, 5.78, 4.98, PANEL)
-text(slide, "EARLY FINDINGS", 0.88, 1.75, 4.85, 0.31, 12, GREEN, True)
-findings = [
-    "A* reconnection completed the most starts in this map.",
-    "Obstacle coupling improved DMP completion by 18.3 points.",
-    "Runtime safety stops exposed controller corner-cutting.",
-]
-for i, item in enumerate(findings):
-    y = 2.29 + i * 1.21
-    text(slide, f"0{i+1}", 0.87, y, 0.57, 0.37, 15, GREEN, True)
-    text(slide, item, 1.49, y - 0.03, 4.36, 0.83, 17, WHITE)
-rect(slide, 6.58, 1.46, 5.98, 4.98, PANEL)
-text(slide, "NEXT MILESTONES", 6.91, 1.75, 4.86, 0.31, 12, GOLD, True)
-next_steps = [
-    "Feed periodic ICP corrections into noisy odometry runs.",
-    "Test more obstacle layouts and larger pose offsets.",
-    "Tune controller and DMP coupling; report uncertainty.",
-]
-for i, item in enumerate(next_steps):
-    y = 2.29 + i * 1.21
-    text(slide, f"0{i+1}", 6.89, y, 0.57, 0.37, 15, GOLD, True)
-    text(slide, item, 7.52, y - 0.03, 4.48, 0.83, 17, WHITE)
+create_figures()
+deck = Presentation()
+deck.slide_width = Inches(10)
+deck.slide_height = Inches(5.625)
 
-# 9 — transparent experiment details and source files
-slide = base("Experiment details and reproducibility", "08  /  Appendix")
-rect(slide, 0.55, 1.44, 5.87, 4.95, PANEL)
-text(slide, "TRIAL DESIGN", 0.89, 1.76, 4.9, 0.35, 13, CYAN, True)
-lines = [
-    "60 starts = 4 x positions × 5 y positions × 3 headings",
-    "10 × 7 m static map with two circular obstacles",
-    "Rover radius 0.16 m; path margin 0.12 m",
-    "Deterministic bounded unicycle controller",
-    "Unsafe paths rejected before execution; margin monitored online",
-]
-for i, line in enumerate(lines):
-    text(slide, "• " + line, 0.90, 2.24 + i * 0.73, 4.97, 0.63, 15, WHITE)
-rect(slide, 6.67, 1.44, 5.90, 4.95, PANEL)
-text(slide, "REPRODUCE", 7.00, 1.76, 5.00, 0.35, 13, GREEN, True)
-text(slide, "python src/robot_motion.py\npython build_slides.py", 7.00, 2.22, 5.08, 0.87,
-     18, WHITE, font="Cascadia Code")
-text(slide, "The script exports trial-level CSV, summary JSON, and the figures shown here.",
-     7.00, 3.45, 4.89, 1.05, 16, MUTED)
-text(slide, "Sources: class proposal and literature review; Ijspeert et al. (2013), Hoffmann et al. (2009), Besl & McKay (1992).",
-     7.00, 5.07, 4.97, 0.94, 12, MUTED)
+# 1: The same two-tone cover as the original class deck.
+page = deck.slides.add_slide(deck.slide_layouts[6])
+page.background.fill.solid()
+page.background.fill.fore_color.rgb = color(BLACK)
+box(page, 0, 0, 10, 1.91, TEAL)
+label(page, "Teach & Repeat Rover Navigation", 0.43, 0.63, 9.2, 0.72, 31, CREAM)
+label(page, "Project update  |  Initial simulation results", 0.43, 2.33, 9.1, 0.63, 27, CREAM)
+line(page, 0.48, 3.32, 1.18, 3.32, CREAM, 2.2)
+label(page, "Ayush Kaulgud  ·  Irenov Joel  ·  Tapisar Singh", 0.48, 3.71, 8.8, 0.44, 19, CREAM, True)
+label(page, "October 7, 2026", 0.48, 4.27, 6.0, 0.31, 15, CREAM)
+
+# 2: Context with a concrete image instead of an abstract card.
+page = slide("Where the project stands")
+label(page, "The task", 0.48, 1.04, 3.0, 0.36, 18, BLACK, True)
+label(page, "Start the rover away from a taught route and recover to the same goal without hitting an obstacle.",
+      0.48, 1.45, 4.35, 1.18, 18)
+label(page, "What works today", 0.48, 2.79, 3.8, 0.36, 18, BLACK, True)
+label(page, "• One safe demonstration\n• Four recovery planners\n• Path and runtime safety checks\n• A separate ICP alignment demo",
+      0.51, 3.14, 4.3, 1.69, 16)
+figure(page, RESULTS / "route_example_class_style.png", 5.04, 1.17, 4.48, 3.86)
+label(page, "A* reconnection from one displaced start. Dashed line is the taught route.",
+      5.18, 5.06, 4.35, 0.27, 10, GREY)
+
+# 3: Workflow follows the original deck's teal process boxes.
+page = slide("From demonstration to evaluation")
+steps = [("Teach route", 0.40), ("Build map", 2.42), ("Estimate pose", 4.44),
+         ("Generate path", 6.46), ("Check + run", 8.48)]
+for title, x in steps:
+    box(page, x, 1.38, 1.38, 0.95, TEAL, DEEP_TEAL, True)
+    label(page, title, x + 0.08, 1.59, 1.22, 0.52, 15, BLACK, align=PP_ALIGN.CENTER)
+for x in (1.80, 3.82, 5.84, 7.86):
+    line(page, x, 1.85, x + 0.52, 1.85, DEEP_TEAL, 1.5)
+    label(page, "›", x + 0.29, 1.62, 0.20, 0.42, 20, DEEP_TEAL)
+label(page, "Four candidate paths", 0.52, 2.83, 4.0, 0.41, 19, BLACK, True)
+label(page, "Direct waypoints  ·  Local A* reconnection\nClassical DMP  ·  Obstacle-aware DMP",
+      0.52, 3.28, 8.85, 0.95, 19)
+label(page, "Current navigation runs use exact pose; ICP is demonstrated separately on a synthetic scan.",
+      0.52, 4.59, 8.92, 0.43, 13, GREY)
+
+# 4: Four methods as actual trajectories, with no decorative containers.
+page = slide("One offset start, four outcomes")
+figure(page, RESULTS / "four_methods_class_style.png", 0.35, 0.96, 9.32, 4.15)
+label(page, "Start: (2.2, 3.35) m, −35°. Red circles are obstacles; dotted rings include rover radius + safety margin.",
+      0.49, 5.19, 9.12, 0.26, 10.5, GREY)
+
+# 5: A simple editable bar chart. Every bar is grounded in metrics.json.
+page = slide("Completion across 60 starts per method")
+names = [("Direct waypoints", "Waypoints"), ("Local reconnection", "Local reconnection"),
+         ("Classical DMP", "Classical DMP"), ("Obstacle-aware DMP", "Obstacle-aware DMP")]
+for i, (display, key) in enumerate(names):
+    y = 1.27 + i * 0.82
+    value = METHODS[key]["completion_pct"]
+    label(page, display, 0.48, y, 2.60, 0.38, 17)
+    box(page, 3.08, y + 0.07, 4.95, 0.26, "E2E1D9")
+    box(page, 3.08, y + 0.07, 4.95 * value / 100, 0.26, TEAL)
+    label(page, f"{value:.1f}%", 8.19, y - 0.01, 1.02, 0.39, 19, BLACK, True)
+label(page, "A* local reconnection completed the most starts in this map.",
+      0.48, 4.77, 8.95, 0.38, 17, BLACK, True)
+label(page, "Across all 240 trials: 0 collisions; unsafe plans were rejected or stopped.",
+      0.48, 5.15, 9.0, 0.22, 10.5, GREY)
+
+# 6: The complete set of metrics from the original slideshow.
+page = slide("The other measurements matter too")
+headers = ["Method", "Rejected", "Stopped", "Min. clear.", "Goal err.", "Plan time"]
+xs = [0.49, 3.02, 4.25, 5.43, 6.87, 8.17]
+ws = [2.46, 1.16, 1.12, 1.37, 1.23, 1.35]
+box(page, 0.41, 1.09, 9.15, 0.46, PALE_TEAL)
+for x, w, h in zip(xs, ws, headers):
+    label(page, h, x, 1.18, w, 0.24, 12, BLACK, True)
+for i, (display, key) in enumerate(names):
+    y = 1.62 + i * 0.70
+    m = METHODS[key]
+    if i % 2:
+        box(page, 0.41, y, 9.15, 0.65, "F1F1E9")
+    vals = [display, f'{m["rejection_pct"]:.1f}%', f'{m["safety_stop_pct"]:.1f}%',
+            f'{m["minimum_clearance_m"]:.3f} m', f'{m["median_goal_error_m"]:.3f} m',
+            f'{m["median_planning_ms"]:.2f} ms']
+    for x, w, value in zip(xs, ws, vals):
+        label(page, value, x, y + 0.15, w, 0.34, 12.5)
+    line(page, 0.41, y + 0.65, 9.56, y + 0.65, LIGHT_GREY, 0.5)
+label(page, "All methods had 0% observed collision rate. Goal error is the median of completed runs.",
+      0.49, 4.56, 9.0, 0.29, 12, GREY)
+label(page, "Minimum clearance includes sampled safety stops; planning time varies by computer.",
+      0.49, 4.90, 9.0, 0.29, 12, GREY)
+
+# 7: ICP is shown clearly as a separate prototype.
+page = slide("ICP scan alignment: separate prototype")
+figure(page, RESULTS / "icp_class_style.png", 0.45, 1.05, 5.50, 4.08)
+label(page, "55 synthetic terrain landmarks", 6.05, 1.32, 3.38, 0.44, 17, BLACK, True)
+label(page, f'Alignment RMSE   {METRICS["icp"]["registration_rmse_m"]:.3f} m',
+      6.05, 2.03, 3.49, 0.36, 17)
+label(page, f'Translation error   {METRICS["icp"]["translation_error_m"]:.4f} m',
+      6.05, 2.64, 3.49, 0.36, 17)
+label(page, f'Rotation error   {METRICS["icp"]["rotation_error_deg"]:.3f}°',
+      6.05, 3.25, 3.49, 0.36, 17)
+label(page, "Navigation results on the previous slides still use exact rover pose.",
+      6.05, 4.13, 3.28, 0.68, 13, GREY)
+
+# 8: Conservative interpretation and credible next work.
+page = slide("What we can say so far")
+label(page, "1", 0.49, 1.29, 0.38, 0.48, 24, TEAL, True)
+label(page, "Local A* reconnection is strongest in this single map: 76.7% completion.",
+      0.93, 1.31, 8.52, 0.62, 17)
+label(page, "2", 0.49, 2.19, 0.38, 0.48, 24, TEAL, True)
+label(page, "Obstacle coupling raises DMP completion from 35.0% to 53.3%.",
+      0.93, 2.21, 8.52, 0.62, 17)
+label(page, "3", 0.49, 3.09, 0.38, 0.48, 24, TEAL, True)
+label(page, "No collisions occurred with safety checks enabled, but some paths stopped early.",
+      0.93, 3.11, 8.52, 0.62, 17)
+line(page, 0.49, 4.11, 9.47, 4.11, TEAL, 1.2)
+label(page, "Next: integrate ICP with noisy odometry; test more maps and pose offsets; tune controller tracking.",
+      0.49, 4.43, 8.92, 0.69, 16, BLACK, True)
+
+# 9: A plain appendix supports questions in class.
+page = slide("Method notes and sources")
+label(page, "Trial design", 0.49, 1.14, 3.8, 0.33, 17, BLACK, True)
+label(page, "60 starts = 4 x positions × 5 y positions × 3 headings. Static 10 × 7 m map, two circular obstacles, 0.16 m rover radius, 0.12 m margin. Shared bounded controller.",
+      0.49, 1.49, 8.95, 1.08, 15)
+label(page, "Reproduce", 0.49, 2.79, 3.8, 0.33, 17, BLACK, True)
+label(page, "python src/robot_motion.py     python build_slides.py",
+      0.49, 3.15, 8.95, 0.43, 15, BLACK, font="Consolas")
+label(page, "Background references", 0.49, 3.89, 5.4, 0.33, 17, BLACK, True)
+label(page, "Ijspeert et al. (2013) on DMPs; Hoffmann et al. (2009) on obstacle coupling; Besl & McKay (1992) on ICP. Sources listed in the original class presentation.",
+      0.49, 4.24, 8.95, 0.95, 13.5)
 
 OUT.parent.mkdir(exist_ok=True)
-pres.save(OUT)
+deck.save(OUT)
 print(OUT)

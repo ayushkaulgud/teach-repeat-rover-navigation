@@ -23,4 +23,4 @@ python src/robot_motion.py
 python build_slides.py
 ```
 
-The first command generates the CSV, JSON, and three plot images in `results/`. The second builds the PowerPoint deck in `docs/` from those outputs.
+The simulation command generates CSV, JSON, and plot images in `results/`. The slide command creates a PowerPoint deck in `docs/` with the cream-and-teal style of the team's original presentation.
