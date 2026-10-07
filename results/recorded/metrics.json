@@ -1,0 +1,80 @@
+{
+  "dataset": "Freiburg Campus 2004-07-14 raw CARMEN log",
+  "recorded_scans_total": 15683,
+  "route_scan_indices": [
+    300,
+    549
+  ],
+  "route_length_m": 29.59,
+  "obstacle_cells": 751,
+  "map_resolution_m": 0.25,
+  "simulator": "PyBullet DIRECT; Husky URDF; 120 Hz",
+  "starts_per_method": 15,
+  "start_offsets_m": [
+    -1.2,
+    -0.6,
+    0,
+    0.6,
+    1.2
+  ],
+  "heading_offsets_deg": [
+    -30,
+    0,
+    30
+  ],
+  "body_radius_for_screening_m": 0.42,
+  "path_safety_margin_m": 0.15,
+  "pose_for_navigation": "exact simulated Bullet pose",
+  "odometry_note": "Recorded odometry is a route reference, not independent ground truth",
+  "icp": {
+    "before_m": 0.64,
+    "after_m": 0.044,
+    "residual_rmse_m": 0.047
+  },
+  "methods": {
+    "Direct waypoints": {
+      "trials": 15,
+      "completion_pct": 100.0,
+      "rejection_pct": 0.0,
+      "safety_stop_pct": 0.0,
+      "collision_pct": 0.0,
+      "minimum_clearance_m": 0.287,
+      "median_goal_error_m": 0.646,
+      "median_planning_ms": 0.12,
+      "median_distance_m": 29.28
+    },
+    "Local A*": {
+      "trials": 15,
+      "completion_pct": 100.0,
+      "rejection_pct": 0.0,
+      "safety_stop_pct": 0.0,
+      "collision_pct": 0.0,
+      "minimum_clearance_m": 0.287,
+      "median_goal_error_m": 0.646,
+      "median_planning_ms": 1.59,
+      "median_distance_m": 29.29
+    },
+    "Classical DMP": {
+      "trials": 15,
+      "completion_pct": 0.0,
+      "rejection_pct": 100.0,
+      "safety_stop_pct": 0.0,
+      "collision_pct": 0.0,
+      "minimum_clearance_m": null,
+      "median_goal_error_m": null,
+      "median_planning_ms": 7.73,
+      "median_distance_m": null
+    },
+    "Obstacle-aware DMP": {
+      "trials": 15,
+      "completion_pct": 100.0,
+      "rejection_pct": 0.0,
+      "safety_stop_pct": 0.0,
+      "collision_pct": 0.0,
+      "minimum_clearance_m": 0.287,
+      "median_goal_error_m": 0.647,
+      "median_planning_ms": 10.15,
+      "median_distance_m": 29.27
+    }
+  }
+}

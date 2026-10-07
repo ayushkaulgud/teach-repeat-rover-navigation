@@ -1,9 +1,9 @@
-# Project scope
+# Project scope and measured update
 
-Develop and evaluate a simulated teach-and-repeat navigation system that lets a ground robot reuse a single human-demonstrated route from different starting positions and headings.
+Goal: teach a rover one route, then compare four ways to reach the route and goal from offset starts: direct waypoints, local A* reconnection, classical discrete dynamic movement primitives (DMP), and a DMP with obstacle coupling.
 
-The initial prototype uses a static 10 × 7 m map, two circular obstacles, a 0.16 m rover radius, and a 0.12 m path safety margin. It compares four trajectory variants from the team's proposal and paper introduction: direct waypoint tracking, local A* reconnection, classical discrete DMP, and obstacle-aware DMP. It generates 60 starting poses from four x positions, five y positions, and three headings. A shared bounded unicycle controller executes each accepted path.
+The October 7 update uses the recorded Freiburg Campus 2004 raw CARMEN log as its route and laser-obstacle source. Python parses the FLASER records and builds a 0.25 m grid. PyBullet runs a Husky model on that grid at 120 Hz. The tests cover five lateral offsets and three heading offsets, with the same controller and collision geometry for every planner. A path is rejected if the grid-estimated obstacle clearance after a 0.42 m body-radius proxy is below 0.15 m.
 
-Metrics from the original slideshow: collision-free completion, collisions, route rejection, minimum obstacle clearance, goal-position error, and computation time. The simulator also records runtime safety stops and route distance. Candidate paths that fail the clearance check are rejected; execution stops when the clearance margin is crossed.
+Measurements: completion, path rejection, safety stops, physical Bullet contacts, minimum grid-estimated clearance, goal-position error, distance traveled, and planning time. Completion requires ending within 0.65 m of the recorded goal. All per-trial and summary values are checked in under `results/recorded/`.
 
-ICP is demonstrated on a synthetic 55-point scan. The next phase is to integrate periodic ICP correction with noisy odometry during navigation and test additional map and obstacle configurations.
+This is a recorded-data simulation, not a replay of real repeat drives or a physical rover result. Logged odometry is treated as a reference route, not verified ground truth. Navigation currently uses exact simulated pose. A separate ICP example aligns a held-out recorded scan to the map and compares the estimate with logged odometry.
