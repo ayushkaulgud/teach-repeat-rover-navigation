@@ -1,0 +1,29 @@
+{
+  "dataset": "Freiburg Campus 2004-07-14 raw CARMEN log",
+  "held_out_recorded_scans": 34,
+  "icp_pose_updates": 68,
+  "controller_updates": 204,
+  "accepted_methods": [
+    "Direct waypoints",
+    "Local A*",
+    "Obstacle-aware DMP"
+  ],
+  "rejected_method": "Classical DMP: path failed the pre-drive clearance screen",
+  "median_prediction_error_m": 0.025,
+  "median_icp_error_m": 0.025,
+  "methods": {
+    "Direct waypoints": {
+      "median_prediction_turn_error_rad_s": 0.014,
+      "median_icp_turn_error_rad_s": 0.014
+    },
+    "Local A*": {
+      "median_prediction_turn_error_rad_s": 0.014,
+      "median_icp_turn_error_rad_s": 0.013
+    },
+    "Obstacle-aware DMP": {
+      "median_prediction_turn_error_rad_s": 0.013,
+      "median_icp_turn_error_rad_s": 0.014
+    }
+  },
+  "limit": "Offline real-scan replay with logged odometry increments. Commands were computed but not applied to a robot or Bullet drive. Reference commands are computed from logged odometry, not measured robot commands."
+}

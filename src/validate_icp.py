@@ -52,7 +52,7 @@ def run():
                "p90_final_error_m": round(float(np.percentile(final, 90)), 3),
                "improved_pct": round(float(np.mean(final < initial) * 100), 1),
                "within_0_2_m_pct": round(float(np.mean(final <= .2) * 100), 1),
-               "reference_note": "Errors are relative to logged odometry, not surveyed ground truth; the map window uses the logged pose."}
+               "reference_note": "Errors are relative to logged odometry, not surveyed ground truth; the map window uses the initial pose estimate."}
     (out / "summary.json").write_text(json.dumps(summary, indent=2) + "\n")
     fig, ax = plt.subplots(figsize=(9, 4.2), layout="constrained")
     for direction, color in (("positive", "#148a7d"), ("negative", "#b7822f")):

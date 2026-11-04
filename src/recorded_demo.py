@@ -205,6 +205,17 @@ def mesh_obstacles(world):
     return bullet.createMultiBody(baseMass=0, baseCollisionShapeIndex=shape, baseVisualShapeIndex=visual)
 
 
+def tracking_command(path, xy, heading):
+    """Return the speed and turn command used by the Bullet path follower."""
+    closest = int(np.argmin(np.sum((path - xy) ** 2, axis=1)))
+    look = min(closest + 13, len(path) - 1)
+    target = path[look]
+    error = (math.atan2(target[1] - xy[1], target[0] - xy[0]) - heading + math.pi) % (2 * math.pi) - math.pi
+    speed = .78 * (.18 + .82 * max(0, math.cos(error)))
+    turn = np.clip(2 * speed * math.sin(error) / 1.3, -1.2, 1.2)
+    return speed, turn
+
+
 def simulate(world, path, start, capture=False):
     bullet.resetSimulation()
     bullet.setAdditionalSearchPath(pybullet_data.getDataPath())
@@ -241,13 +252,8 @@ def simulate(world, path, start, capture=False):
             _, _, pixels, _, _ = bullet.getCameraImage(1280, 720, view, projection,
                                                        renderer=bullet.ER_TINY_RENDERER)
             Image.fromarray(np.asarray(pixels, dtype=np.uint8).reshape(720, 1280, 4)[:, :, :3]).save(OUT / "bullet_scene.png")
-        closest = int(np.argmin(np.sum((path - xy) ** 2, axis=1)))
-        look = min(closest + 13, len(path) - 1)
-        target = path[look]
         heading = bullet.getEulerFromQuaternion(quat)[2]
-        error = (math.atan2(target[1] - xy[1], target[0] - xy[0]) - heading + math.pi) % (2 * math.pi) - math.pi
-        speed = .78 * (.18 + .82 * max(0, math.cos(error)))
-        turn = np.clip(2 * speed * math.sin(error) / 1.3, -1.2, 1.2)
+        speed, turn = tracking_command(path, xy, heading)
         left, right = (speed - .27 * turn) / .165, (speed + .27 * turn) / .165
         for joint, velocity in ((2, left), (4, left), (3, right), (5, right)):
             bullet.setJointMotorControl2(rover, joint, bullet.VELOCITY_CONTROL,
@@ -259,7 +265,7 @@ def simulate(world, path, start, capture=False):
     return status, trace, minimum, step * DT
 
 
-def scan_icp(world, scan_id=430, pose_offset=(.5, -.4, math.radians(8))):
+def scan_icp(world, scan_id=430, pose_offset=(.5, -.4, math.radians(8)), initial_pose=None):
     """Align a held-out recorded scan to other recorded returns, using odometry as reference."""
     with gzip.open(LOG, "rt", errors="replace") as source:
         scans = (line for line in source if line.startswith("FLASER "))
@@ -270,10 +276,13 @@ def scan_icp(world, scan_id=430, pose_offset=(.5, -.4, math.radians(8))):
     valid = (ranges > .2) & (ranges < 15)
     local = np.column_stack((ranges[valid] * np.cos(angles[valid]), ranges[valid] * np.sin(angles[valid])))
     truth = world.raw_poses[scan_id]
+    estimate = (truth + np.asarray(pose_offset, float) if initial_pose is None
+                else np.asarray(initial_pose, float).copy())
     target = world.scan_points
-    target = target[np.linalg.norm(target - truth[:2], axis=1) < 15]
+    target = target[np.linalg.norm(target - estimate[:2], axis=1) < 15]
+    if len(target) < 3:
+        target = world.scan_points
     tree = cKDTree(target)
-    estimate = truth.copy() + np.asarray(pose_offset, float)
     before = np.linalg.norm(estimate[:2] - truth[:2])
     for _ in range(30):
         rot = np.array(((math.cos(estimate[2]), -math.sin(estimate[2])),
@@ -299,7 +308,7 @@ def scan_icp(world, scan_id=430, pose_offset=(.5, -.4, math.radians(8))):
                     (math.sin(estimate[2]), math.cos(estimate[2]))))
     aligned = local @ rot.T + estimate[:2]
     residual = tree.query(aligned)[0]
-    return {"reference_xy": truth[:2], "before_m": before,
+    return {"reference_xy": truth[:2], "estimate_pose": estimate.copy(), "before_m": before,
             "after_m": float(np.linalg.norm(estimate[:2] - truth[:2])),
             "residual_rmse_m": float(np.sqrt(np.mean(residual ** 2))),
             "scan_xy": aligned, "map_xy": target}
