@@ -37,7 +37,7 @@ MARGIN = 0.15
 DT = 1 / 120
 
 
-def read_log():
+def read_log(map_start=250, map_stop=570):
     poses, scans = [], []
     with gzip.open(LOG, "rt", errors="replace") as source:
         for line in source:
@@ -48,7 +48,7 @@ def read_log():
             i = len(poses)
             pose = np.array(fields[count + 5:count + 8], float)
             poses.append(pose)
-            if 250 <= i < 570 and i % 3 == 0:
+            if map_start <= i < map_stop and i % 3 == 0:
                 ranges = np.array(fields[2:count + 2:3], float)
                 angles = np.linspace(-np.pi / 2, np.pi / 2, count)[::3] + pose[2]
                 valid = (ranges > 0.2) & (ranges < 25)
@@ -67,8 +67,8 @@ def resample(route, step=0.10):
 
 
 class RecordedMap:
-    def __init__(self, poses, points):
-        self.reference = resample(poses[300:550, :2])
+    def __init__(self, poses, points, route_start=300, route_stop=550):
+        self.reference = resample(poses[route_start:route_stop, :2])
         self.raw_poses = poses
         self.scan_points = points
         self.origin = self.reference.min(axis=0) - 8
@@ -210,7 +210,8 @@ def simulate(world, path, start, capture=False):
     bullet.setAdditionalSearchPath(pybullet_data.getDataPath())
     bullet.setGravity(0, 0, -9.81)
     bullet.setTimeStep(DT)
-    bullet.loadURDF("plane.urdf")
+    # The finite ground plane must cover recorded routes far from the log origin.
+    bullet.loadURDF("plane.urdf", [*world.reference.mean(axis=0), 0])
     mesh = mesh_obstacles(world)
     rover = bullet.loadURDF("husky/husky.urdf", [*start[:2], .35],
                             bullet.getQuaternionFromEuler((0, 0, float(start[2]))))
@@ -258,9 +259,8 @@ def simulate(world, path, start, capture=False):
     return status, trace, minimum, step * DT
 
 
-def scan_icp(world):
+def scan_icp(world, scan_id=430, pose_offset=(.5, -.4, math.radians(8))):
     """Align a held-out recorded scan to other recorded returns, using odometry as reference."""
-    scan_id = 430
     with gzip.open(LOG, "rt", errors="replace") as source:
         scans = (line for line in source if line.startswith("FLASER "))
         fields = next(line.split() for i, line in enumerate(scans) if i == scan_id)
@@ -273,7 +273,7 @@ def scan_icp(world):
     target = world.scan_points
     target = target[np.linalg.norm(target - truth[:2], axis=1) < 15]
     tree = cKDTree(target)
-    estimate = truth.copy() + np.array((.5, -.4, math.radians(8)))
+    estimate = truth.copy() + np.asarray(pose_offset, float)
     before = np.linalg.norm(estimate[:2] - truth[:2])
     for _ in range(30):
         rot = np.array(((math.cos(estimate[2]), -math.sin(estimate[2])),
@@ -281,6 +281,8 @@ def scan_icp(world):
         transformed = local @ rot.T + estimate[:2]
         distances, match = tree.query(transformed)
         use = distances < 1.0
+        if use.sum() < 3:
+            break
         a, b = transformed[use], target[match[use]]
         ac, bc = a.mean(axis=0), b.mean(axis=0)
         u, _, vt = np.linalg.svd((a - ac).T @ (b - bc))

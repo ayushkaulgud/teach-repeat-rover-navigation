@@ -1,16 +1,44 @@
 # Teach & Repeat Rover Navigation
 
-Project update for October 7, 2026. The route and obstacles now come from **recorded outdoor robot data**. The four repeat runs are **simulations** in PyBullet; they are not field trials.
+Project update for November 4, 2026. Routes and obstacles come from **recorded outdoor robot data**. Offset starts and rover repeat runs are **simulations** in PyBullet, not field trials.
 
 ## Presentation
 
-- [Editable Google Slides](https://docs.google.com/presentation/d/1gNvwtoaDBl7mD5Ic5DboO7ct6j_jSnlH-fsdeZ0XbuQ/edit)
+- [November 4 Google Slides](https://docs.google.com/presentation/d/1mMEjuYtlvO5YdlYxQwv-Bh17RfI58aVpHmuNOZ2X2wU/edit)
+- [October 7 Google Slides](https://docs.google.com/presentation/d/1gNvwtoaDBl7mD5Ic5DboO7ct6j_jSnlH-fsdeZ0XbuQ/edit)
 - [PowerPoint export](docs/Teach_and_Repeat_Project_Update_Oct_7_2026.pptx)
 - [PDF preview](docs/Teach_and_Repeat_Project_Update_Oct_7_2026.pdf)
 
-The deck starts with the method, dataset, and simulation software, then shows an actual PyBullet render, route plots, metrics, a recorded-scan ICP test, and limitations. Its cream/teal layout follows the team's original class deck.
+The November deck adds two recorded route segments, a 34-scan ICP validation, updated results, and the remaining timeline. Its cream and teal layout follows the team's class deck.
 
-## Data and experiment
+## November 4 results
+
+The benchmark now covers Freiburg scan windows 300–549, 1050–1299, and 1800–2049. The later two taught routes are 30.60 m and 20.92 m. Each route uses the same four methods and 15 offset starts. The 550–799 and 800–1049 windows failed the 0.15 m route-clearance screen and were excluded from drive trials.
+
+| Method | Completed | Rejected before drive | Bullet contacts |
+| --- | ---: | ---: | ---: |
+| Direct waypoints | 45/45 | 0 | 0 |
+| Local A* | 45/45 | 0 | 0 |
+| Classical DMP | 30/45 | 15 | 0 |
+| Obstacle-aware DMP | 45/45 | 0 | 0 |
+
+There were **180 planning attempts, 165 simulated drives, and 165 completed drives** across these selected recorded segments. No driven trial registered an obstacle contact. The classical DMP's 15 rejected paths all occurred on the first segment. These are outcomes under a static map, common safety screen, and exact simulated pose; they do not establish physical rover performance. [Combined summary](results/nov4/summary.json), [outcomes figure](results/nov4/outcomes.png), [second-route trials](results/second_route/trials.csv), and [third-route trials](results/third_route/trials.csv) preserve the measurements.
+
+ICP was also evaluated on **34 recorded laser scans held out from the map**, with two injected pose offsets per scan. Across 68 registrations, the median position difference from logged odometry fell from 0.640 m to 0.140 m; the 90th-percentile final difference was 0.287 m. Logged odometry is not surveyed ground truth, and the map neighborhood was chosen using that logged pose. ICP has not yet been placed in the navigation loop. [ICP summary](results/icp_validation/summary.json), [trial data](results/icp_validation/trials.csv), and [figure](results/icp_validation/errors.png) show the full results.
+
+Reproduce the November work after installing requirements:
+
+```powershell
+python src/recorded_demo.py
+python src/validate_second_route.py
+python -c "from sys import path; path.insert(0, 'src'); from validate_second_route import run; run(1800, 2050, 1750, 2070, 'third_route')"
+python src/validate_icp.py
+python src/summarize_nov4.py
+```
+
+The simulation ground plane is centered on each recorded route. This fixes a PyBullet setup error that prevented the displaced route windows from driving even though their paths passed the safety screen.
+
+## October baseline setup
 
 The [Freiburg Campus log](https://dspace.mit.edu/entities/publication/de754aaf-ddfc-479c-a193-dc77c7005816) was recorded outdoors by Cyrill Stachniss and Giorgio Grisetti on July 14, 2004 with a Pioneer 2AT and SICK LMS291 laser. MIT lists it as CC0. The raw CARMEN log in [`data/freiburg_campus/raw.log.gz`](data/freiburg_campus/raw.log.gz) contains 15,683 front-laser scans and recorded poses. [Dataset details](data/freiburg_campus/README.md) include its source and checksum.
 
@@ -38,4 +66,4 @@ The run recreates the CSV, JSON, and figures in `results/recorded/`. It takes ab
 
 ## Limits
 
-Laser returns from one short recording define a static map. Moving people and cars in the original scene are frozen into the grid. The test varies starting pose, not terrain or weather. The 0.42 m footprint radius is a path-screening proxy, and grid clearance has 0.25 m resolution. Results should not be presented as physical rover performance. Next: test additional recorded routes, integrate ICP into the navigation loop, and tune the rover model to the intended hardware.
+Laser returns from the recorded segments define static maps. Moving people and cars in the original scene are frozen into the grid. The tests vary starting pose and route segment, not terrain or weather. The 0.42 m footprint radius is a path-screening proxy, and grid clearance has 0.25 m resolution. Results should not be presented as physical rover performance. Next: integrate ICP into the repeat loop, stress excluded route windows and larger starts, and tune the rover model to the intended hardware.

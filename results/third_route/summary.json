@@ -1,0 +1,58 @@
+{
+  "dataset": "Freiburg Campus 2004-07-14 raw CARMEN log",
+  "route_scan_indices": [
+    1800,
+    2049
+  ],
+  "map_scan_indices": [
+    1750,
+    2069
+  ],
+  "route_length_m": 20.92,
+  "recorded_obstacle_cells": 640,
+  "route_minimum_grid_clearance_m": 0.698,
+  "selection_note": "The 550-799 and 800-1049 windows had route clearance below 0.15 m and were not driven",
+  "data_note": "Route and obstacle endpoints are recorded; start offsets and repeat drives are simulated.",
+  "methods": {
+    "Direct waypoints": {
+      "attempts": 15,
+      "completed": 15,
+      "rejected": 0,
+      "collisions": 0,
+      "safety_stops": 0,
+      "timeouts": 0,
+      "median_goal_error_m": 0.648,
+      "median_planning_ms": 0.13
+    },
+    "Local A*": {
+      "attempts": 15,
+      "completed": 15,
+      "rejected": 0,
+      "collisions": 0,
+      "safety_stops": 0,
+      "timeouts": 0,
+      "median_goal_error_m": 0.647,
+      "median_planning_ms": 1.83
+    },
+    "Classical DMP": {
+      "attempts": 15,
+      "completed": 15,
+      "rejected": 0,
+      "collisions": 0,
+      "safety_stops": 0,
+      "timeouts": 0,
+      "median_goal_error_m": 0.648,
+      "median_planning_ms": 7.73
+    },
+    "Obstacle-aware DMP": {
+      "attempts": 15,
+      "completed": 15,
+      "rejected": 0,
+      "collisions": 0,
+      "safety_stops": 0,
+      "timeouts": 0,
+      "median_goal_error_m": 0.648,
+      "median_planning_ms": 10.16
+    }
+  }
+}

@@ -1,0 +1,24 @@
+{
+  "dataset": "Freiburg Campus 2004-07-14 raw CARMEN log",
+  "scan_selection": "Every fifth route scan held out from the every-third-scan map, indices 300-549",
+  "distinct_recorded_scans": 34,
+  "registrations": 68,
+  "initial_offsets_xy_heading": [
+    [
+      0.5,
+      -0.4,
+      8
+    ],
+    [
+      -0.5,
+      0.4,
+      -8
+    ]
+  ],
+  "initial_error_m": 0.64,
+  "median_final_error_m": 0.14,
+  "p90_final_error_m": 0.287,
+  "improved_pct": 100.0,
+  "within_0_2_m_pct": 79.4,
+  "reference_note": "Errors are relative to logged odometry, not surveyed ground truth; the map window uses the logged pose."
+}

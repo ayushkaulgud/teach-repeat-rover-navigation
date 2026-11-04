@@ -1,0 +1,29 @@
+{
+  "recorded_route_windows": [
+    "Scans 300\u2013549",
+    "Scans 1050\u20131299",
+    "Scans 1800\u20132049"
+  ],
+  "planning_attempts": 180,
+  "simulated_drives": 165,
+  "statuses": {
+    "completed": 165,
+    "rejected": 15
+  },
+  "methods": {
+    "Direct waypoints": {
+      "completed": 45
+    },
+    "Local A*": {
+      "completed": 45
+    },
+    "Classical DMP": {
+      "rejected": 15,
+      "completed": 30
+    },
+    "Obstacle-aware DMP": {
+      "completed": 45
+    }
+  },
+  "note": "Routes and static obstacle observations are recorded Freiburg data. Offset starts and PyBullet drives are simulated. Route windows were screened for clearance."
+}
