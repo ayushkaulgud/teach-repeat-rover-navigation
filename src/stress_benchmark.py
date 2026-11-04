@@ -89,7 +89,7 @@ def run():
                         else:
                             status, trace, minimum, duration = (
                                 "rejected", np.array([start[:2]]),
-                                world.clearance(start[:2]), 0)
+                                world.path_minimum_clearance(path), 0)
                             diagnostics = {"minimum_bullet_clearance_m": None,
                                            "absolute_turn_integral_rad": None,
                                            "rms_turn_command_radps": None}

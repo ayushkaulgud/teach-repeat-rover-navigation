@@ -102,9 +102,13 @@ class RecordedMap:
         return np.array([g[cell] for g in self.gradient])
 
     def clear_path(self, path, margin=MARGIN):
+        return self.path_minimum_clearance(path) >= margin
+
+    def path_minimum_clearance(self, path):
+        """Return the minimum grid clearance along a candidate path."""
         if path is None:
-            return False
-        return all(self.clearance(xy) >= margin for xy in resample(path, 0.08))
+            return -math.inf
+        return min(self.clearance(xy) for xy in resample(path, 0.08))
 
 
 def direct_path(world, start):
@@ -439,7 +443,7 @@ def run():
                     path = dmp_path(world, start, model, method == "Obstacle-aware DMP")
                 planning_ms = (time.perf_counter() - t0) * 1000
                 if not world.clear_path(path):
-                    status, trace, minimum, duration = "rejected", np.array([start[:2]]), world.clearance(start[:2]), 0
+                    status, trace, minimum, duration = "rejected", np.array([start[:2]]), world.path_minimum_clearance(path), 0
                     diagnostics = {"minimum_bullet_clearance_m": None,
                                    "absolute_turn_integral_rad": None,
                                    "rms_turn_command_radps": None}

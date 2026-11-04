@@ -151,7 +151,7 @@ def run(runs: int = 100, seed: int = 20261104):
                     path = dmp_path(world, start, model, method == "Obstacle-aware DMP")
                 planning_ms = (time.perf_counter() - t0) * 1000
                 if not world.clear_path(path):
-                    status, trace, minimum, duration = "rejected", np.array([start[:2]]), world.clearance(start[:2]), 0.0
+                    status, trace, minimum, duration = "rejected", np.array([start[:2]]), world.path_minimum_clearance(path), 0.0
                     diagnostics = {"minimum_bullet_clearance_m": None,
                                    "absolute_turn_integral_rad": None,
                                    "rms_turn_command_radps": None}
