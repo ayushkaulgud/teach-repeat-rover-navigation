@@ -97,10 +97,10 @@ class RecordedMap:
             return np.zeros(2)
         return np.array([g[cell] for g in self.gradient])
 
-    def clear_path(self, path):
+    def clear_path(self, path, margin=MARGIN):
         if path is None:
             return False
-        return all(self.clearance(xy) >= MARGIN for xy in resample(path, 0.08))
+        return all(self.clearance(xy) >= margin for xy in resample(path, 0.08))
 
 
 def direct_path(world, start):
@@ -216,7 +216,20 @@ def tracking_command(path, xy, heading):
     return speed, turn
 
 
-def simulate(world, path, start, capture=False):
+def adaptive_tracking_command(path, xy, heading):
+    """Use a shorter lookahead when far from the path, and slow for sharp turns."""
+    closest = int(np.argmin(np.sum((path - xy) ** 2, axis=1)))
+    cross_track = float(np.linalg.norm(path[closest] - xy))
+    look = min(closest + (8 if cross_track > .5 else 16), len(path) - 1)
+    target = path[look]
+    error = (math.atan2(target[1] - xy[1], target[0] - xy[0]) - heading + math.pi) % (2 * math.pi) - math.pi
+    speed = .78 * max(.22, math.cos(error))
+    turn = np.clip(2 * speed * math.sin(error) / 1.3 + .5 * math.sin(error), -1.2, 1.2)
+    return speed, turn
+
+
+def simulate(world, path, start, capture=False, *, controller=tracking_command,
+             rover_model="husky", lateral_friction=None, proximity_stop_m=None):
     bullet.resetSimulation()
     bullet.setAdditionalSearchPath(pybullet_data.getDataPath())
     bullet.setGravity(0, 0, -9.81)
@@ -224,8 +237,17 @@ def simulate(world, path, start, capture=False):
     # The finite ground plane must cover recorded routes far from the log origin.
     bullet.loadURDF("plane.urdf", [*world.reference.mean(axis=0), 0])
     mesh = mesh_obstacles(world)
-    rover = bullet.loadURDF("husky/husky.urdf", [*start[:2], .35],
+    urdf = "husky/husky.urdf" if rover_model == "husky" else str(ROOT / "models/fri_rover.urdf")
+    if rover_model not in ("husky", "fri_rover"):
+        raise ValueError(f"Unknown rover model: {rover_model}")
+    rover = bullet.loadURDF(urdf, [*start[:2], .35],
                             bullet.getQuaternionFromEuler((0, 0, float(start[2]))))
+    left_joints, right_joints = ((2, 4), (3, 5)) if rover_model == "husky" else ((0, 2), (1, 3))
+    if lateral_friction is not None:
+        if lateral_friction <= 0:
+            raise ValueError("lateral_friction must be positive")
+        for joint in (*left_joints, *right_joints):
+            bullet.changeDynamics(rover, joint, lateralFriction=lateral_friction)
     trace = []
     minimum = math.inf
     goal = world.reference[-1]
@@ -238,6 +260,9 @@ def simulate(world, path, start, capture=False):
         minimum = min(minimum, world.clearance(xy))
         if bullet.getContactPoints(rover, mesh):
             status = "collision"
+            break
+        if proximity_stop_m is not None and bullet.getClosestPoints(rover, mesh, proximity_stop_m):
+            status = "safety_stop"
             break
         if np.linalg.norm(xy - goal) < .65:
             status = "completed"
@@ -253,11 +278,14 @@ def simulate(world, path, start, capture=False):
                                                        renderer=bullet.ER_TINY_RENDERER)
             Image.fromarray(np.asarray(pixels, dtype=np.uint8).reshape(720, 1280, 4)[:, :, :3]).save(OUT / "bullet_scene.png")
         heading = bullet.getEulerFromQuaternion(quat)[2]
-        speed, turn = tracking_command(path, xy, heading)
+        speed, turn = controller(path, xy, heading)
         left, right = (speed - .27 * turn) / .165, (speed + .27 * turn) / .165
-        for joint, velocity in ((2, left), (4, left), (3, right), (5, right)):
+        for joint in left_joints:
             bullet.setJointMotorControl2(rover, joint, bullet.VELOCITY_CONTROL,
-                                         targetVelocity=float(velocity), force=150)
+                                         targetVelocity=float(left), force=150)
+        for joint in right_joints:
+            bullet.setJointMotorControl2(rover, joint, bullet.VELOCITY_CONTROL,
+                                         targetVelocity=float(right), force=150)
         bullet.stepSimulation()
     if np.linalg.norm(trace[-1] - xy) > 1e-8:
         trace.append(xy)

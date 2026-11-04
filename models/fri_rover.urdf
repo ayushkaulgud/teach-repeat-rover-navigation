@@ -1,0 +1,48 @@
+<?xml version="1.0"?>
+<robot name="fri_four_wheel_rover">
+  <!-- A deliberately simple class-built surrogate, not a calibrated physical rover. -->
+  <link name="chassis">
+    <inertial>
+      <origin xyz="0 0 0"/>
+      <mass value="40"/>
+      <inertia ixx="1.0" ixy="0" ixz="0" iyy="2.0" iyz="0" izz="2.5"/>
+    </inertial>
+    <visual>
+      <geometry><box size="0.75 0.50 0.15"/></geometry>
+      <material name="body"><color rgba="0.10 0.48 0.45 1"/></material>
+    </visual>
+    <collision><geometry><box size="0.75 0.50 0.15"/></geometry></collision>
+  </link>
+  <link name="front_left_wheel">
+    <inertial><mass value="3"/><inertia ixx="0.025" ixy="0" ixz="0" iyy="0.04" iyz="0" izz="0.025"/></inertial>
+    <visual><origin rpy="1.57079632679 0 0"/><geometry><cylinder radius="0.165" length="0.08"/></geometry><material name="tire"><color rgba="0.13 0.13 0.13 1"/></material></visual>
+    <collision><origin rpy="1.57079632679 0 0"/><geometry><cylinder radius="0.165" length="0.08"/></geometry></collision>
+  </link>
+  <joint name="front_left" type="continuous">
+    <parent link="chassis"/><child link="front_left_wheel"/><origin xyz="0.28 0.27 -0.18"/><axis xyz="0 1 0"/>
+  </joint>
+  <link name="front_right_wheel">
+    <inertial><mass value="3"/><inertia ixx="0.025" ixy="0" ixz="0" iyy="0.04" iyz="0" izz="0.025"/></inertial>
+    <visual><origin rpy="1.57079632679 0 0"/><geometry><cylinder radius="0.165" length="0.08"/></geometry><material name="tire"><color rgba="0.13 0.13 0.13 1"/></material></visual>
+    <collision><origin rpy="1.57079632679 0 0"/><geometry><cylinder radius="0.165" length="0.08"/></geometry></collision>
+  </link>
+  <joint name="front_right" type="continuous">
+    <parent link="chassis"/><child link="front_right_wheel"/><origin xyz="0.28 -0.27 -0.18"/><axis xyz="0 1 0"/>
+  </joint>
+  <link name="rear_left_wheel">
+    <inertial><mass value="3"/><inertia ixx="0.025" ixy="0" ixz="0" iyy="0.04" iyz="0" izz="0.025"/></inertial>
+    <visual><origin rpy="1.57079632679 0 0"/><geometry><cylinder radius="0.165" length="0.08"/></geometry><material name="tire"><color rgba="0.13 0.13 0.13 1"/></material></visual>
+    <collision><origin rpy="1.57079632679 0 0"/><geometry><cylinder radius="0.165" length="0.08"/></geometry></collision>
+  </link>
+  <joint name="rear_left" type="continuous">
+    <parent link="chassis"/><child link="rear_left_wheel"/><origin xyz="-0.28 0.27 -0.18"/><axis xyz="0 1 0"/>
+  </joint>
+  <link name="rear_right_wheel">
+    <inertial><mass value="3"/><inertia ixx="0.025" ixy="0" ixz="0" iyy="0.04" iyz="0" izz="0.025"/></inertial>
+    <visual><origin rpy="1.57079632679 0 0"/><geometry><cylinder radius="0.165" length="0.08"/></geometry><material name="tire"><color rgba="0.13 0.13 0.13 1"/></material></visual>
+    <collision><origin rpy="1.57079632679 0 0"/><geometry><cylinder radius="0.165" length="0.08"/></geometry></collision>
+  </link>
+  <joint name="rear_right" type="continuous">
+    <parent link="chassis"/><child link="rear_right_wheel"/><origin xyz="-0.28 -0.27 -0.18"/><axis xyz="0 1 0"/>
+  </joint>
+</robot>

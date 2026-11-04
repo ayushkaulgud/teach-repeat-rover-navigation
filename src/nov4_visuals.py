@@ -75,8 +75,8 @@ def timeline():
         (4, 14, 45, "Four planners on three recorded routes", red, True, True),
         (3, 31, 45, "ICP control replay", red, True, True),
         (3, 45, 52, "ICP drive", red, False, True),
-        (2, 17, 45, "180 attempts / 165 drives", indigo, True, True),
-        (2, 52, 63, "Stress tests", indigo, False, True),
+        (2, 17, 45, "Baseline + stress comparisons", indigo, True, True),
+        (2, 45, 63, "Analyze safety tradeoffs", indigo, False, True),
         (1, 45, 63, "Report + demo", indigo, False, True),
     )
     for y, start, end, label, color, done, inside in tasks:

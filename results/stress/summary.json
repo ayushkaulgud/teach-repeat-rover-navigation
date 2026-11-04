@@ -1,0 +1,224 @@
+{
+  "dataset": "Freiburg Campus 2004-07-14 raw CARMEN log",
+  "recorded_route_scan_windows": [
+    "300-549",
+    "1050-1299",
+    "1800-2049"
+  ],
+  "route_lengths_m": {
+    "300-549": 29.59,
+    "1050-1299": 30.6,
+    "1800-2049": 20.92
+  },
+  "simulation": "PyBullet DIRECT at 120 Hz; logged routes and laser endpoints are recorded",
+  "wide_offsets_m": [
+    -2.4,
+    0,
+    2.4
+  ],
+  "wide_heading_offsets_deg": [
+    -60,
+    0,
+    60
+  ],
+  "matched_offsets_m": [
+    -0.6,
+    0,
+    0.6
+  ],
+  "matched_heading_offset_deg": 0,
+  "low_friction_proxy": "Wheel-link lateralFriction=0.2 in PyBullet; not a measured field slip coefficient",
+  "conservative_screen": "0.38 m grid clearance after the 0.42 m body-radius proxy; baseline uses 0.15 m",
+  "proximity_guard": "Stops the simulated rover when Bullet's body-to-obstacle distance is below 0.15 m",
+  "class_rover": "Uncalibrated four-wheel URDF, 40 kg chassis, 0.165 m wheel radius, 0.27 m half-track",
+  "attempts": 408,
+  "simulated_drives": 333,
+  "scenarios": {
+    "wide starts": {
+      "attempts": 108,
+      "status_counts": {
+        "collision": 6,
+        "rejected": 9,
+        "completed": 93
+      },
+      "methods": {
+        "Direct waypoints": {
+          "collision": 2,
+          "completed": 25
+        },
+        "Local A*": {
+          "collision": 2,
+          "completed": 25
+        },
+        "Classical DMP": {
+          "rejected": 9,
+          "completed": 18
+        },
+        "Obstacle-aware DMP": {
+          "collision": 2,
+          "completed": 25
+        }
+      }
+    },
+    "wide conservative": {
+      "attempts": 108,
+      "status_counts": {
+        "rejected": 36,
+        "completed": 72
+      },
+      "methods": {
+        "Direct waypoints": {
+          "rejected": 9,
+          "completed": 18
+        },
+        "Local A*": {
+          "rejected": 9,
+          "completed": 18
+        },
+        "Classical DMP": {
+          "rejected": 9,
+          "completed": 18
+        },
+        "Obstacle-aware DMP": {
+          "rejected": 9,
+          "completed": 18
+        }
+      }
+    },
+    "wide proximity guard": {
+      "attempts": 108,
+      "status_counts": {
+        "safety_stop": 6,
+        "rejected": 9,
+        "completed": 93
+      },
+      "methods": {
+        "Direct waypoints": {
+          "safety_stop": 2,
+          "completed": 25
+        },
+        "Local A*": {
+          "safety_stop": 2,
+          "completed": 25
+        },
+        "Classical DMP": {
+          "rejected": 9,
+          "completed": 18
+        },
+        "Obstacle-aware DMP": {
+          "safety_stop": 2,
+          "completed": 25
+        }
+      }
+    },
+    "adaptive wide starts": {
+      "attempts": 36,
+      "status_counts": {
+        "collision": 6,
+        "rejected": 9,
+        "completed": 21
+      },
+      "methods": {
+        "Direct waypoints": {
+          "collision": 2,
+          "completed": 7
+        },
+        "Local A*": {
+          "collision": 2,
+          "completed": 7
+        },
+        "Classical DMP": {
+          "rejected": 9
+        },
+        "Obstacle-aware DMP": {
+          "collision": 2,
+          "completed": 7
+        }
+      }
+    },
+    "matched baseline": {
+      "attempts": 12,
+      "status_counts": {
+        "completed": 9,
+        "rejected": 3
+      },
+      "methods": {
+        "Direct waypoints": {
+          "completed": 3
+        },
+        "Local A*": {
+          "completed": 3
+        },
+        "Classical DMP": {
+          "rejected": 3
+        },
+        "Obstacle-aware DMP": {
+          "completed": 3
+        }
+      }
+    },
+    "adaptive controller": {
+      "attempts": 12,
+      "status_counts": {
+        "completed": 9,
+        "rejected": 3
+      },
+      "methods": {
+        "Direct waypoints": {
+          "completed": 3
+        },
+        "Local A*": {
+          "completed": 3
+        },
+        "Classical DMP": {
+          "rejected": 3
+        },
+        "Obstacle-aware DMP": {
+          "completed": 3
+        }
+      }
+    },
+    "low friction": {
+      "attempts": 12,
+      "status_counts": {
+        "completed": 9,
+        "rejected": 3
+      },
+      "methods": {
+        "Direct waypoints": {
+          "completed": 3
+        },
+        "Local A*": {
+          "completed": 3
+        },
+        "Classical DMP": {
+          "rejected": 3
+        },
+        "Obstacle-aware DMP": {
+          "completed": 3
+        }
+      }
+    },
+    "class rover": {
+      "attempts": 12,
+      "status_counts": {
+        "completed": 9,
+        "rejected": 3
+      },
+      "methods": {
+        "Direct waypoints": {
+          "completed": 3
+        },
+        "Local A*": {
+          "completed": 3
+        },
+        "Classical DMP": {
+          "rejected": 3
+        },
+        "Obstacle-aware DMP": {
+          "completed": 3
+        }
+      }
+    }
+  }
+}
