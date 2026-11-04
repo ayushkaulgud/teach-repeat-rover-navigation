@@ -25,6 +25,9 @@ from PIL import Image
 from scipy.ndimage import distance_transform_edt
 from scipy.spatial import cKDTree
 
+from dmp import DiscreteDMP2D, HoffmannObstacleCoupling
+from navigation_metrics import path_geometry, tracking_quality
+
 
 ROOT = Path(__file__).resolve().parents[1]
 LOG = ROOT / "data/freiburg_campus/raw.log.gz"
@@ -35,6 +38,7 @@ RES = 0.25
 BODY_RADIUS = 0.42  # Husky footprint approximation for path screening.
 MARGIN = 0.15
 DT = 1 / 120
+GOAL_TOLERANCE_M = 0.25
 
 
 def read_log(map_start=250, map_stop=570):
@@ -98,9 +102,13 @@ class RecordedMap:
         return np.array([g[cell] for g in self.gradient])
 
     def clear_path(self, path, margin=MARGIN):
+        return self.path_minimum_clearance(path) >= margin
+
+    def path_minimum_clearance(self, path):
+        """Return the minimum grid clearance along a candidate path."""
         if path is None:
-            return False
-        return all(self.clearance(xy) >= margin for xy in resample(path, 0.08))
+            return -math.inf
+        return min(self.clearance(xy) for xy in resample(path, 0.08))
 
 
 def direct_path(world, start):
@@ -147,43 +155,27 @@ def astar_path(world, start):
 
 
 def learn_dmp(route):
-    reference = np.column_stack([np.interp(np.linspace(0, 1, 501),
-                                           np.linspace(0, 1, len(route)), route[:, i]) for i in range(2)])
-    dt = 1 / (len(reference) - 1)
-    velocity = np.gradient(reference, dt, axis=0)
-    acceleration = np.gradient(velocity, dt, axis=0)
-    phase = np.exp(-4 * np.linspace(0, 1, len(reference)))
-    centers = np.exp(-4 * np.linspace(0, 1, 60))
-    widths = 60 ** 1.5 / centers
-    psi = np.exp(-widths[None, :] * (phase[:, None] - centers[None, :]) ** 2)
-    features = phase[:, None] * psi / np.maximum(psi.sum(axis=1, keepdims=True), 1e-12)
-    target = acceleration - 25 * (6.25 * (reference[-1] - reference) - velocity)
-    weights = np.linalg.solve(features.T @ features + .001 * np.eye(60), features.T @ target)
-    return centers, widths, weights
+    """Fit a spatially scaled classical discrete DMP to the taught route."""
+    return DiscreteDMP2D.fit(route)
 
 
 def dmp_path(world, start, model, avoid=False):
-    centers, widths, weights = model
-    point, velocity = np.array(start[:2], float), np.zeros(2)
-    path = [point.copy()]
-    dt = .002
-    for k in range(850):
-        phase = math.exp(-4 * k * dt)
-        psi = np.exp(-widths * (phase - centers) ** 2)
-        forcing = phase * (psi @ weights) / max(psi.sum(), 1e-12)
-        coupling = np.zeros(2)
-        if avoid:
-            clearance = world.clearance(point)
-            if clearance < 1.2:
-                gradient = world.gradient_at(point)
-                norm = np.linalg.norm(gradient)
-                if norm > 1e-8:
-                    coupling = 200 * max(0, 1.2 - clearance) * gradient / norm
-        acceleration = 25 * (6.25 * (world.reference[-1] - point) - velocity) + forcing + coupling
-        velocity += acceleration * dt
-        point = point + velocity * dt
-        path.append(point.copy())
-    return resample(np.asarray(path))
+    """Roll the fitted DMP out from an offset start to the taught goal.
+
+    The classical path uses only the stable transformation system.  The
+    obstacle-aware path adds the Hoffmann velocity-dependent steering term;
+    both still pass through the same independent clearance screen afterward.
+    """
+    coupling = None
+    if avoid:
+        coupling = HoffmannObstacleCoupling(
+            world.obstacle_xy,
+            influence_distance=1.5,
+            body_radius=BODY_RADIUS + RES / 2,
+        )
+    path = model.rollout(np.asarray(start[:2], float), world.reference[-1],
+                         samples=1001, coupling=coupling)
+    return resample(path)
 
 
 def mesh_obstacles(world):
@@ -229,7 +221,8 @@ def adaptive_tracking_command(path, xy, heading):
 
 
 def simulate(world, path, start, capture=False, *, controller=tracking_command,
-             rover_model="husky", lateral_friction=None, proximity_stop_m=None):
+             rover_model="husky", lateral_friction=None, proximity_stop_m=None,
+             goal_tolerance_m=GOAL_TOLERANCE_M, return_diagnostics=False):
     bullet.resetSimulation()
     bullet.setAdditionalSearchPath(pybullet_data.getDataPath())
     bullet.setGravity(0, 0, -9.81)
@@ -250,6 +243,10 @@ def simulate(world, path, start, capture=False, *, controller=tracking_command,
             bullet.changeDynamics(rover, joint, lateralFriction=lateral_friction)
     trace = []
     minimum = math.inf
+    minimum_bullet_clearance = math.inf
+    absolute_turn_integral = 0.0
+    squared_turn_integral = 0.0
+    command_duration = 0.0
     goal = world.reference[-1]
     status = "timeout"
     for step in range(120 * 100):
@@ -257,6 +254,12 @@ def simulate(world, path, start, capture=False, *, controller=tracking_command,
         xy = np.array(pos[:2])
         if step % 6 == 0:
             trace.append(xy.copy())
+            nearby = bullet.getClosestPoints(rover, mesh, 5.0)
+            if nearby:
+                minimum_bullet_clearance = min(
+                    minimum_bullet_clearance,
+                    min(float(contact[8]) for contact in nearby),
+                )
         minimum = min(minimum, world.clearance(xy))
         if bullet.getContactPoints(rover, mesh):
             status = "collision"
@@ -264,7 +267,7 @@ def simulate(world, path, start, capture=False, *, controller=tracking_command,
         if proximity_stop_m is not None and bullet.getClosestPoints(rover, mesh, proximity_stop_m):
             status = "safety_stop"
             break
-        if np.linalg.norm(xy - goal) < .65:
+        if np.linalg.norm(xy - goal) < goal_tolerance_m:
             status = "completed"
             break
         if minimum < .08:
@@ -279,6 +282,9 @@ def simulate(world, path, start, capture=False, *, controller=tracking_command,
             Image.fromarray(np.asarray(pixels, dtype=np.uint8).reshape(720, 1280, 4)[:, :, :3]).save(OUT / "bullet_scene.png")
         heading = bullet.getEulerFromQuaternion(quat)[2]
         speed, turn = controller(path, xy, heading)
+        absolute_turn_integral += abs(float(turn)) * DT
+        squared_turn_integral += float(turn) ** 2 * DT
+        command_duration += DT
         left, right = (speed - .27 * turn) / .165, (speed + .27 * turn) / .165
         for joint in left_joints:
             bullet.setJointMotorControl2(rover, joint, bullet.VELOCITY_CONTROL,
@@ -290,7 +296,21 @@ def simulate(world, path, start, capture=False, *, controller=tracking_command,
     if np.linalg.norm(trace[-1] - xy) > 1e-8:
         trace.append(xy)
     trace = np.asarray(trace)
-    return status, trace, minimum, step * DT
+    duration = step * DT
+    if not return_diagnostics:
+        return status, trace, minimum, duration
+    diagnostics = {
+        "minimum_bullet_clearance_m": (
+            round(minimum_bullet_clearance, 4)
+            if math.isfinite(minimum_bullet_clearance) else None
+        ),
+        "absolute_turn_integral_rad": round(absolute_turn_integral, 4),
+        "rms_turn_command_radps": (
+            round(math.sqrt(squared_turn_integral / command_duration), 4)
+            if command_duration > 0 else 0.0
+        ),
+    }
+    return status, trace, minimum, duration, diagnostics
 
 
 def scan_icp(world, scan_id=430, pose_offset=(.5, -.4, math.radians(8)), initial_pose=None):
@@ -423,15 +443,26 @@ def run():
                     path = dmp_path(world, start, model, method == "Obstacle-aware DMP")
                 planning_ms = (time.perf_counter() - t0) * 1000
                 if not world.clear_path(path):
-                    status, trace, minimum, duration = "rejected", np.array([start[:2]]), world.clearance(start[:2]), 0
+                    status, trace, minimum, duration = "rejected", np.array([start[:2]]), world.path_minimum_clearance(path), 0
+                    diagnostics = {"minimum_bullet_clearance_m": None,
+                                   "absolute_turn_integral_rad": None,
+                                   "rms_turn_command_radps": None}
                 else:
-                    status, trace, minimum, duration = simulate(world, path, start,
-                                                               method == "Local A*" and start[3:] == (.6, 0))
-                rows.append({"method": method, "offset_m": start[3], "heading_offset_deg": start[4],
-                             "status": status, "minimum_clearance_m": round(minimum, 3),
-                             "goal_error_m": round(float(np.linalg.norm(trace[-1] - world.reference[-1])), 3),
-                             "planning_ms": round(planning_ms, 2), "duration_s": round(duration, 2),
-                             "distance_m": round(float(np.linalg.norm(np.diff(trace, axis=0), axis=1).sum()), 2)})
+                    status, trace, minimum, duration, diagnostics = simulate(
+                        world, path, start,
+                        method == "Local A*" and start[3:] == (.6, 0),
+                        return_diagnostics=True)
+                row = {"method": method, "offset_m": start[3],
+                       "heading_offset_deg": start[4], "status": status,
+                       "safe_success": int(status == "completed"),
+                       "minimum_grid_clearance_m": round(minimum, 3),
+                       "goal_error_m": round(float(np.linalg.norm(trace[-1] - world.reference[-1])), 3),
+                       "planning_ms": round(planning_ms, 2),
+                       "duration_s": round(duration, 2)}
+                row.update(path_geometry(path))
+                row.update(tracking_quality(trace, path, duration))
+                row.update(diagnostics)
+                rows.append(row)
                 if start[3:] == (.6, 0):
                     examples[method] = (path, trace, status)
                 print(f"{method:20} offset={start[3]:+4.1f} heading={start[4]:+3} {status}", flush=True)
@@ -450,10 +481,12 @@ def run():
         for status, key in (("completed", "completion_pct"), ("rejected", "rejection_pct"),
                             ("safety_stop", "safety_stop_pct"), ("collision", "collision_pct")):
             summary[method][key] = round(100 * sum(r["status"] == status for r in subset) / len(subset), 1)
-        summary[method].update({"minimum_clearance_m": min((r["minimum_clearance_m"] for r in executed), default=None),
+        summary[method].update({"minimum_grid_clearance_m": min((r["minimum_grid_clearance_m"] for r in executed), default=None),
                                 "median_goal_error_m": round(float(np.median([r["goal_error_m"] for r in completed])), 3) if completed else None,
                                 "median_planning_ms": round(float(np.median([r["planning_ms"] for r in subset])), 2),
-                                "median_distance_m": round(float(np.median([r["distance_m"] for r in completed])), 2) if completed else None})
+                                "median_driven_distance_m": round(float(np.median([r["driven_distance_m"] for r in completed])), 2) if completed else None,
+                                "median_cross_track_rmse_m": round(float(np.median([r["cross_track_rmse_m"] for r in completed])), 3) if completed else None,
+                                "median_bending_energy_1pm": round(float(np.median([r["bending_energy_1pm"] for r in subset])), 3)})
     icp = scan_icp(world)
     metrics = {"dataset": "Freiburg Campus 2004-07-14 raw CARMEN log", "recorded_scans_total": len(poses),
                "route_scan_indices": [300, 549], "route_length_m": round(float(np.linalg.norm(np.diff(world.reference, axis=0), axis=1).sum()), 2),
@@ -461,6 +494,7 @@ def run():
                "simulator": "PyBullet DIRECT; Husky URDF; 120 Hz", "starts_per_method": len(starts),
                "start_offsets_m": [-1.2, -.6, 0, .6, 1.2], "heading_offsets_deg": [-30, 0, 30],
                "body_radius_for_screening_m": BODY_RADIUS, "path_safety_margin_m": MARGIN,
+               "goal_tolerance_m": GOAL_TOLERANCE_M,
                "pose_for_navigation": "exact simulated Bullet pose", "odometry_note": "Recorded odometry is a route reference, not independent ground truth",
                "icp": {key: round(value, 3) for key, value in icp.items() if isinstance(value, float)},
                "methods": summary}
@@ -471,3 +505,4 @@ def run():
 
 if __name__ == "__main__":
     run()
+

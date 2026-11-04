@@ -1,5 +1,34 @@
 # Teach & Repeat Rover Navigation
 
+## DMP implementation revision
+
+The navigation code now uses a **classical discrete DMP with spatial
+rotation/scaling**, implemented in [`src/dmp.py`](src/dmp.py). The learned
+forcing term is represented in the demonstration's local start-to-goal frame
+and transformed into each requested rollout frame. The obstacle-aware version
+adds the velocity-dependent steering coupling of Hoffmann et al. (2009).
+
+The CSV files and figures dated November 4 were produced by the earlier,
+unscaled prototype and are retained as historical results. **Do not combine
+those numbers with results from the revised DMP.** Regenerate every comparison
+before making a final planner claim:
+
+```powershell
+python -m unittest discover -s tests -v
+python src/recorded_demo.py
+python src/validate_second_route.py
+python -c "from sys import path; path.insert(0, 'src'); from validate_second_route import run; run(1800, 2050, 1750, 2070, 'third_route')"
+python src/stress_benchmark.py
+python src/complex_path_benchmark.py --runs 100
+```
+
+New trial tables report completion, rejection, contacts, exact Bullet
+clearance, grid clearance, planning time, drive time, path length, cross-track
+error, curvature, bending energy, and steering effort as separate quantities.
+No subjective combined “safety rating” is used. Completion-rate summaries
+include Wilson 95% confidence intervals. See
+[`docs/dmp_method.md`](docs/dmp_method.md) for equations and assumptions.
+
 Project update for November 4, 2026. Routes and obstacles come from **recorded outdoor robot data**. Offset starts and rover repeat runs are **simulations** in PyBullet, not field trials.
 
 ## Presentation
@@ -83,7 +112,7 @@ The [Freiburg Campus log](https://dspace.mit.edu/entities/publication/de754aaf-d
 | Classical DMP | 0/15 | 15/15 | 0/15 | 7.73 ms |
 | Obstacle-aware DMP | 15/15 | 0/15 | 0/15 | 10.15 ms |
 
-The classical DMP's candidate paths failed the 0.15 m map-clearance rule and were rejected before execution. The other planners completed all starts in this **one** route segment. There were no Bullet obstacle contacts. Completion means ending within 0.65 m of the logged goal; it does not imply centimeter-scale accuracy. Full measurements are in [`metrics.json`](results/recorded/metrics.json) and each trial is in [`trials.csv`](results/recorded/trials.csv).
+The classical DMP's candidate paths failed the 0.15 m map-clearance rule and were rejected before execution. The other planners completed all starts in this **one** route segment. There were no Bullet obstacle contacts. These historical November 4 runs used a 0.65 m completion threshold. The revised benchmark uses a 0.25 m threshold and records it in generated metadata. Full historical measurements are in [`metrics.json`](results/recorded/metrics.json) and each trial is in [`trials.csv`](results/recorded/trials.csv).
 
 A held-out recorded scan was aligned to nearby returns with ICP after an injected 0.64 m pose error. Its final displacement from **logged odometry** was 0.044 m, with 0.047 m map residual. Logged odometry is not independent surveyed ground truth.
 
@@ -99,3 +128,4 @@ The run recreates the CSV, JSON, and figures in `results/recorded/`. It takes ab
 ## Limits
 
 Laser returns from the recorded segments define static maps. Moving people and cars in the original scene are frozen into the grid. The tests vary starting pose, route segment, controller, rover model, and a simulated wheel-friction setting, not measured terrain or weather. The 0.42 m footprint radius is a path-screening proxy, and grid clearance has 0.25 m resolution. Results should not be presented as physical rover performance. Next: apply ICP poses in a closed-loop drive, assess excluded route windows, and calibrate the rover model to intended hardware.
+

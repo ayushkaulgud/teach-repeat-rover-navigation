@@ -34,6 +34,7 @@ from recorded_demo import (
     read_log,
     simulate,
 )
+from navigation_metrics import path_geometry, tracking_quality, wilson_interval
 
 ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_PRESETS = {
@@ -106,23 +107,29 @@ def run_benchmark(
                 planning_ms = (time.perf_counter() - t0) * 1000
 
                 if not world.clear_path(path):
-                    status, trace, minimum, duration = "rejected", np.array([start[:2]]), world.clearance(start[:2]), 0.0
+                    status, trace, minimum, duration = "rejected", np.array([start[:2]]), world.path_minimum_clearance(path), 0.0
+                    diagnostics = {"minimum_bullet_clearance_m": None,
+                                   "absolute_turn_integral_rad": None,
+                                   "rms_turn_command_radps": None}
                 else:
-                    status, trace, minimum, duration = simulate(world, path, start)
+                    status, trace, minimum, duration, diagnostics = simulate(
+                        world, path, start, return_diagnostics=True)
 
-                rows.append(
-                    {
+                row = {
                         "method": method,
                         "offset_m": start[3],
                         "heading_offset_deg": start[4],
                         "status": status,
-                        "minimum_clearance_m": round(float(minimum), 3),
+                        "safe_success": int(status == "completed"),
+                        "minimum_grid_clearance_m": round(float(minimum), 3),
                         "goal_error_m": round(float(np.linalg.norm(trace[-1] - world.reference[-1])), 3),
                         "planning_ms": round(float(planning_ms), 2),
                         "duration_s": round(float(duration), 2),
-                        "distance_m": round(float(np.linalg.norm(np.diff(trace, axis=0), axis=1).sum()), 2),
                     }
-                )
+                row.update(path_geometry(path))
+                row.update(tracking_quality(trace, path, duration))
+                row.update(diagnostics)
+                rows.append(row)
                 print(f"{method:20} offset={start[3]:+4.1f} heading={start[4]:+3} {status}", flush=True)
     finally:
         bullet.disconnect()
@@ -148,6 +155,7 @@ def run_benchmark(
     for method in METHODS:
         subset = [r for r in rows if r["method"] == method]
         completed = [r for r in subset if r["status"] == "completed"]
+        interval = wilson_interval(len(completed), len(subset))
         summary["methods"][method] = {
             "attempts": len(subset),
             "completed": len(completed),
@@ -155,8 +163,12 @@ def run_benchmark(
             "collisions": sum(r["status"] == "collision" for r in subset),
             "safety_stops": sum(r["status"] == "safety_stop" for r in subset),
             "timeouts": sum(r["status"] == "timeout" for r in subset),
+            "completion_rate_pct": round(100 * len(completed) / len(subset), 1),
+            "completion_rate_95ci_pct": [round(100 * value, 1) for value in interval],
             "median_goal_error_m": round(float(np.median([r["goal_error_m"] for r in completed])), 3) if completed else None,
             "median_planning_ms": round(float(np.median([r["planning_ms"] for r in subset])), 2),
+            "median_duration_s": round(float(np.median([r["duration_s"] for r in completed])), 2) if completed else None,
+            "median_cross_track_rmse_m": round(float(np.median([r["cross_track_rmse_m"] for r in completed])), 3) if completed else None,
         }
     (out / "summary.json").write_text(json.dumps(summary, indent=2) + "\n")
     print(json.dumps(summary, indent=2))
@@ -181,3 +193,4 @@ if __name__ == "__main__":
         heading_offsets_deg=cfg["heading_offsets_deg"],
         result_dir=f"scenario_{cfg['label']}",
     )
+
