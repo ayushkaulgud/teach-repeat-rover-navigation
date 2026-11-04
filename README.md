@@ -37,7 +37,7 @@ python src/stress_visuals.py
 python src/nov4_visuals.py
 ```
 
-[Trial rows](results/stress/trials.csv), [summary](results/stress/summary.json), [start map](results/stress/scenario_map.png), [safety comparison](results/stress/safety_comparison.png), and [matched check](results/stress/matched_checks.png) are committed outputs. A physical rover test, measured wheel slip, and a closed-loop ICP repeat drive remain to be done. The existing ICP controller replay computes commands from recorded scans but does not apply them to a moving robot or Bullet drive.
+[Trial rows](results/stress/trials.csv), [summary](results/stress/summary.json), [start map](results/stress/scenario_map.png), [planner outcomes](results/stress/planner_limits.png), [safety comparison](results/stress/safety_comparison.png), and [matched check](results/stress/matched_checks.png) are committed outputs. A physical rover test, measured wheel slip, and a closed-loop ICP repeat drive remain to be done. The existing ICP controller replay computes commands from recorded scans but does not apply them to a moving robot or Bullet drive.
 
 ## November 4 results
 

@@ -11,7 +11,7 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import numpy as np
 
-from recorded_demo import RecordedMap, read_log
+from recorded_demo import METHODS, RecordedMap, read_log
 from stress_benchmark import OUT, make_start
 
 
@@ -83,6 +83,33 @@ def make_figures():
     ax.legend(handles, [s.replace("_", " ").title() for s in statuses],
               frameon=False, ncol=4, loc="upper center", bbox_to_anchor=(.5, -.18))
     fig.savefig(OUT / "safety_comparison.png", dpi=180, facecolor=fig.get_facecolor())
+    plt.close(fig)
+
+    wide = [r for r in rows if r["scenario"] == "wide starts"]
+    fig, ax = plt.subplots(figsize=(10.4, 4.3), layout="constrained")
+    fig.patch.set_facecolor("#fbf6ea")
+    for i, method in enumerate(METHODS):
+        count = Counter(r["status"] for r in wide if r["method"] == method)
+        assert sum(count.values()) == 27
+        left = 0
+        for status in ("completed", "rejected", "collision"):
+            n = count[status]
+            if n:
+                ax.barh(i, n, left=left, color=colors[status], height=.6)
+                ax.text(left + n / 2, i, str(n), ha="center", va="center",
+                        color="white", weight="bold", fontsize=12)
+                left += n
+    ax.set_yticks(range(4), METHODS)
+    ax.invert_yaxis()
+    ax.set(xlim=(0, 27), xlabel="Planning attempts per method (9 starts × 3 routes)",
+           title="Wide-start outcomes by planner")
+    ax.grid(axis="x", alpha=.18)
+    ax.set_axisbelow(True)
+    handles = [plt.Rectangle((0, 0), 1, 1, color=colors[s])
+               for s in ("completed", "rejected", "collision")]
+    ax.legend(handles, ("Completed", "Rejected before drive", "Bullet contact"),
+              frameon=False, ncol=3, loc="upper center", bbox_to_anchor=(.5, -.18))
+    fig.savefig(OUT / "planner_limits.png", dpi=180, facecolor=fig.get_facecolor())
     plt.close(fig)
 
     scenarios = ("matched baseline", "adaptive controller", "low friction", "class rover")
