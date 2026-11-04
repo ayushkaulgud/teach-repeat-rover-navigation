@@ -6,8 +6,6 @@ import matplotlib
 
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
-from matplotlib.lines import Line2D
-from matplotlib.patches import Patch
 import numpy as np
 
 from recorded_demo import RecordedMap, read_log
@@ -59,38 +57,66 @@ def recorded_routes():
 
 
 def timeline():
-    fig, ax = plt.subplots(figsize=(11, 5.2), layout="constrained")
+    fig, ax = plt.subplots(figsize=(11.2, 5.5), layout="constrained")
     fig.patch.set_facecolor("#fbf6ea")
-    ax.set_facecolor("#fbf6ea")
-    # Filled diamonds are dated results; outlined bars are future schedule windows.
-    for label, day, y in (("October baseline", 0, 4),
-                          ("Two new recorded routes", 28, 3),
-                          ("Held-out ICP validation", 28, 2)):
-        ax.scatter(day, y, s=145, marker="D", color="#168d82", zorder=5)
-        ax.text(day + 1, y, label, va="center", ha="left", fontsize=11)
-    for label, left, width, y in (("ICP in repeat loop", 28, 7, 1),
-                                  ("Stress tests and report", 35, 11, 0)):
-        ax.barh(y, width, left=left, height=.56, color="white",
-                edgecolor="#168d82", linewidth=1.8)
-        ax.text(left + .6, y, label, va="center", ha="left", fontsize=11)
-    ax.axvline(28, color="#bc8537", lw=2.3, ls="--", zorder=4)
-    ax.annotate("WE ARE HERE\nNOV 4", xy=(28, 4.3), xytext=(28, 5.1),
-                ha="center", va="bottom", color="#9b6320", weight="bold", fontsize=12,
-                arrowprops={"arrowstyle": "-|>", "color": "#bc8537", "lw": 1.8})
-    ax.set_xlim(-1, 47)
-    ax.set_ylim(-.65, 5.5)
-    ax.set_yticks([])
-    ax.set_xticks((0, 14, 28, 35, 46), ("Oct 7", "Oct 21", "Nov 4", "Nov 11", "Nov 22"))
-    ax.tick_params(axis="x", labelsize=11, length=0, pad=8)
-    ax.grid(axis="x", alpha=.2)
+    ax.set_facecolor("white")
+    indigo, red, amber = "#686fc5", "#c74c47", "#b7822f"
+    bands = (
+        (6, "#eef0fb"), (5, "#f7f7fd"), (4, "#fffadf"),
+        (3, "#f7f7fd"), (2, "#eef0fb"), (1, "#f7f7fd"), (0, "#fffadf"),
+    )
+    for y, color in bands:
+        ax.axhspan(y - .46, y + .46, color=color, zorder=0)
+
+    # Schedule windows follow the class timeline; filled work is complete at Nov 4.
+    tasks = (
+        (6, 0, 17, "Simulation + route replay", indigo, True, True),
+        (5, 7, 17, "Freiburg map + waypoint / A*", indigo, True, False),
+        (4, 14, 45, "Four planners on three recorded routes", red, True, True),
+        (3, 31, 45, "34 held-out scans", red, True, True),
+        (3, 45, 52, "ICP loop", red, False, True),
+        (2, 17, 45, "180 attempts / 165 drives", indigo, True, True),
+        (2, 52, 63, "Stress tests", indigo, False, True),
+        (1, 45, 63, "Report + demo", indigo, False, True),
+    )
+    for y, start, end, label, color, done, inside in tasks:
+        ax.barh(y, end - start, left=start, height=.42,
+                color=color if done else "white", edgecolor=color,
+                linewidth=1.8, zorder=3)
+        ax.text(start + .5 if inside else end + .5, y, label,
+                va="center", ha="left", fontsize=12,
+                color="white" if done and inside else "#292929", zorder=4)
+
+    for x, label in ((17, "M1"), (28, "M2"), (45, "M3"), (63, "M4")):
+        ax.scatter(x, 0, s=130, marker="D",
+                   facecolor=indigo if x < 63 else "white",
+                   edgecolor=indigo, linewidth=1.7, zorder=5)
+        ax.text(x + .7 if x < 63 else x - .7, 0, label,
+                ha="left" if x < 63 else "right", va="center",
+                fontsize=11, color="#292929", zorder=5)
+
+    ax.axvline(45, color=amber, lw=2.2, ls="--", zorder=6)
+    ax.annotate("WE ARE HERE\nNOV 4", xy=(45, 6.47), xytext=(45, 7.12),
+                ha="center", va="bottom", fontsize=14, color="#946018",
+                weight="bold", arrowprops={"arrowstyle": "-|>", "color": amber, "lw": 1.7})
+    ax.text(0, 7.2, "Filled: complete     Outline: planned", fontsize=11,
+            color="#555555", va="bottom")
+    ax.set_xlim(-1.5, 65)
+    ax.set_ylim(-.6, 7.65)
+    ax.set_yticks((6, 5, 4, 3, 2, 1, 0),
+                  ("Phase 1 Foundation", "Phase 2 Data + baselines",
+                   "Phase 3 Method comparison", "Phase 4 Localization",
+                   "Phase 5 Experimentation", "Phase 6 Finalization",
+                   "Milestones"))
+    ax.tick_params(axis="y", labelsize=11, length=0, pad=8)
+    ax.set_xticks((0, 7, 14, 21, 28, 35, 45, 49, 56, 63),
+                  ("Sep 20", "Sep 27", "Oct 4", "Oct 11", "Oct 18",
+                   "Oct 25", "Nov 4", "Nov 8", "Nov 15", "Nov 22"))
+    ax.tick_params(axis="x", labelsize=10, length=0, pad=8)
+    ax.grid(axis="x", color="#555555", alpha=.23)
     ax.set_axisbelow(True)
     for spine in ax.spines.values():
         spine.set_visible(False)
-    ax.legend(handles=(Line2D([], [], marker="D", linestyle="", markersize=8,
-                              markerfacecolor="#168d82", markeredgecolor="#168d82",
-                              label="Complete milestone"),
-                       Patch(facecolor="white", edgecolor="#168d82", label="Planned")),
-              frameon=False, loc="lower left", ncol=2)
     fig.savefig(OUT / "timeline.png", dpi=180, facecolor=fig.get_facecolor())
     plt.close(fig)
 
