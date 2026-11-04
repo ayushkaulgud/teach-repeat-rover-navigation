@@ -21,6 +21,7 @@ import pybullet as bullet
 from recorded_demo import (METHODS, RecordedMap, adaptive_tracking_command,
                            astar_path, direct_path, dmp_path, learn_dmp,
                            read_log, simulate, tracking_command)
+from navigation_metrics import path_geometry, tracking_quality, wilson_interval
 
 
 OUT = Path(__file__).resolve().parents[1] / "results/stress"
@@ -80,15 +81,19 @@ def run():
                         planning_ms = round((time.perf_counter() - t0) * 1000, 2)
                         screen_margin = .38 if scenario == "wide conservative" else .15
                         if world.clear_path(path, margin=screen_margin):
-                            status, trace, minimum, duration = simulate(
+                            status, trace, minimum, duration, diagnostics = simulate(
                                 world, path, start, controller=controller,
                                 rover_model=rover, lateral_friction=friction,
-                                proximity_stop_m=.15 if scenario == "wide proximity guard" else None)
+                                proximity_stop_m=.15 if scenario == "wide proximity guard" else None,
+                                return_diagnostics=True)
                         else:
                             status, trace, minimum, duration = (
                                 "rejected", np.array([start[:2]]),
                                 world.clearance(start[:2]), 0)
-                        rows.append({
+                            diagnostics = {"minimum_bullet_clearance_m": None,
+                                           "absolute_turn_integral_rad": None,
+                                           "rms_turn_command_radps": None}
+                        row = {
                             "route_scans": label, "scenario": scenario,
                             "method": method, "offset_m": offset,
                             "heading_offset_deg": heading, "rover_model": rover,
@@ -96,10 +101,15 @@ def run():
                             "controller": "adaptive" if controller is adaptive_tracking_command else "original",
                             "screen_margin_m": screen_margin,
                             "proximity_stop_m": .15 if scenario == "wide proximity guard" else "none",
-                            "status": status, "minimum_grid_clearance_m": round(float(minimum), 3),
+                            "status": status, "safe_success": int(status == "completed"),
+                            "minimum_grid_clearance_m": round(float(minimum), 3),
                             "goal_error_m": round(float(np.linalg.norm(trace[-1] - world.reference[-1])), 3),
                             "duration_s": round(duration, 2), "planning_ms": planning_ms,
-                        })
+                        }
+                        row.update(path_geometry(path))
+                        row.update(tracking_quality(trace, path, duration))
+                        row.update(diagnostics)
+                        rows.append(row)
                     print(label, scenario, offset, heading,
                           [r["status"] for r in rows[-4:]], flush=True)
     finally:
@@ -138,10 +148,27 @@ def run():
         summary["scenarios"][scenario] = {
             "attempts": len(subset),
             "status_counts": dict(Counter(r["status"] for r in subset)),
-            "methods": {method: dict(Counter(r["status"] for r in subset
-                                              if r["method"] == method))
-                        for method in METHODS},
+            "methods": {},
         }
+        for method in METHODS:
+            method_rows = [r for r in subset if r["method"] == method]
+            completed = [r for r in method_rows if r["status"] == "completed"]
+            method_summary = dict(Counter(r["status"] for r in method_rows))
+            interval = wilson_interval(len(completed), len(method_rows))
+            method_summary.update({
+                "completion_rate_pct": round(100 * len(completed) / len(method_rows), 1),
+                "completion_rate_95ci_pct": [round(100 * value, 1) for value in interval],
+                "median_planning_ms": round(float(np.median(
+                    [r["planning_ms"] for r in method_rows])), 2),
+                "median_duration_s": round(float(np.median(
+                    [r["duration_s"] for r in completed])), 2) if completed else None,
+                "median_cross_track_rmse_m": round(float(np.median(
+                    [r["cross_track_rmse_m"] for r in completed])), 3) if completed else None,
+                "median_bending_energy_1pm": round(float(np.median(
+                    [r["bending_energy_1pm"] for r in method_rows
+                     if r["bending_energy_1pm"] is not None])), 3),
+            })
+            summary["scenarios"][scenario]["methods"][method] = method_summary
     (OUT / "summary.json").write_text(json.dumps(summary, indent=2) + "\n")
 
     fig, ax = plt.subplots(figsize=(11, 4.9), layout="constrained")
@@ -170,3 +197,4 @@ def run():
 
 if __name__ == "__main__":
     run()
+
