@@ -37,6 +37,7 @@ from recorded_demo import (
     resample,
     simulate,
 )
+from navigation_metrics import path_geometry, tracking_quality, wilson_interval
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -150,17 +151,26 @@ def run(runs: int = 100, seed: int = 20261104):
                     path = dmp_path(world, start, model, method == "Obstacle-aware DMP")
                 planning_ms = (time.perf_counter() - t0) * 1000
                 if not world.clear_path(path):
-                    status, trace, minimum, duration = "rejected", np.array([start[:2]]), world.clearance(start[:2]), 0.0
+                    status, trace, minimum, duration = "rejected", np.array([start[:2]]), world.path_minimum_clearance(path), 0.0
+                    diagnostics = {"minimum_bullet_clearance_m": None,
+                                   "absolute_turn_integral_rad": None,
+                                   "rms_turn_command_radps": None}
                 else:
-                    status, trace, minimum, duration = simulate(world, path, start)
-                rows.append({
+                    status, trace, minimum, duration, diagnostics = simulate(
+                        world, path, start, return_diagnostics=True)
+                row = {
                     "case_id": start[5], "method": method, "start_offset_m": start[3],
                     "heading_offset_deg": start[4], "status": status,
-                    "minimum_clearance_m": round(float(minimum), 3),
+                    "safe_success": int(status == "completed"),
+                    "minimum_grid_clearance_m": round(float(minimum), 3),
                     "goal_error_m": round(float(np.linalg.norm(trace[-1] - world.reference[-1])), 3),
-                    "planning_ms": round(float(planning_ms), 2), "duration_s": round(float(duration), 2),
-                    "distance_m": round(float(np.linalg.norm(np.diff(trace, axis=0), axis=1).sum()), 2),
-                })
+                    "planning_ms": round(float(planning_ms), 2),
+                    "duration_s": round(float(duration), 2),
+                }
+                row.update(path_geometry(path))
+                row.update(tracking_quality(trace, path, duration))
+                row.update(diagnostics)
+                rows.append(row)
                 print(f"case={start[5]:03d} {method:20} {status}", flush=True)
     finally:
         bullet.disconnect()
@@ -183,6 +193,7 @@ def run(runs: int = 100, seed: int = 20261104):
     for method in METHODS:
         subset = [row for row in rows if row["method"] == method]
         completed = [row for row in subset if row["status"] == "completed"]
+        interval = wilson_interval(len(completed), len(subset))
         summary["methods"][method] = {
             "attempts": len(subset),
             "completed": len(completed),
@@ -191,8 +202,13 @@ def run(runs: int = 100, seed: int = 20261104):
             "safety_stops": sum(row["status"] == "safety_stop" for row in subset),
             "timeouts": sum(row["status"] == "timeout" for row in subset),
             "completion_rate_pct": round(100 * len(completed) / len(subset), 1),
+            "completion_rate_95ci_pct": [round(100 * value, 1) for value in interval],
             "median_goal_error_m": round(float(np.median([row["goal_error_m"] for row in completed])), 3) if completed else None,
             "median_planning_ms": round(float(np.median([row["planning_ms"] for row in subset])), 2),
+            "median_duration_s": round(float(np.median([row["duration_s"] for row in completed])), 2) if completed else None,
+            "median_cross_track_rmse_m": round(float(np.median([row["cross_track_rmse_m"] for row in completed])), 3) if completed else None,
+            "median_bending_energy_1pm": round(float(np.median([row["bending_energy_1pm"] for row in subset
+                                                                  if row["bending_energy_1pm"] is not None])), 3),
         }
     (out / "summary.json").write_text(json.dumps(summary, indent=2) + "\n")
     print(json.dumps(summary, indent=2))
@@ -204,3 +220,4 @@ if __name__ == "__main__":
     parser.add_argument("--seed", type=int, default=20261104)
     args = parser.parse_args()
     run(args.runs, args.seed)
+
